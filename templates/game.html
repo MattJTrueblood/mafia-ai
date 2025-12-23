@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mafia AI - Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Mafia AI Game</h1>
+        
+        <div class="game-controls">
+            <button id="pause-btn">Pause</button>
+            <button id="resume-btn" style="display: none;">Resume</button>
+            <a href="/" class="btn-secondary">New Game</a>
+        </div>
+        
+        <div class="game-info">
+            <div class="info-panel">
+                <h2>Game Status</h2>
+                <div id="phase-display">Phase: <span id="phase-value">-</span></div>
+                <div id="day-display">Day: <span id="day-value">-</span></div>
+                <div id="alive-count">Alive: <span id="alive-value">-</span></div>
+                <div id="winner-display" style="display: none;">
+                    <strong>Winner: <span id="winner-value">-</span></strong>
+                </div>
+            </div>
+            
+            <div class="players-panel">
+                <h2>Players</h2>
+                <div id="players-list"></div>
+            </div>
+        </div>
+        
+        <div class="game-content">
+            <div class="discussion-panel">
+                <h2>Discussion</h2>
+                <div id="discussion-log"></div>
+            </div>
+            
+            <div class="votes-panel">
+                <h2>Votes</h2>
+                <div id="votes-log"></div>
+            </div>
+            
+            <div class="history-panel">
+                <h2>Game History</h2>
+                <div id="history-log"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+    <script>
+        let isPaused = false;
+        let updateInterval = null;
+        
+        function updateGameState() {
+            if (isPaused) return;
+            
+            fetch('/api/game_state')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        return;
+                    }
+                    
+                    updateUI(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching game state:', error);
+                });
+        }
+        
+        function updateUI(state) {
+            // Update phase and day
+            document.getElementById('phase-value').textContent = state.phase || '-';
+            document.getElementById('day-value').textContent = state.day_number || 0;
+            document.getElementById('alive-value').textContent = state.alive_count || 0;
+            
+            // Update winner
+            if (state.winner) {
+                document.getElementById('winner-display').style.display = 'block';
+                document.getElementById('winner-value').textContent = state.winner.toUpperCase();
+            }
+            
+            // Update players list
+            const playersList = document.getElementById('players-list');
+            playersList.innerHTML = '';
+            state.players.forEach(player => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = `player-item ${player.status}`;
+                playerDiv.innerHTML = `
+                    <strong>${player.name}</strong> 
+                    <span class="role">(${player.role})</span>
+                    <span class="status">${player.status}</span>
+                `;
+                playersList.appendChild(playerDiv);
+            });
+            
+            // Update discussion log
+            const discussionLog = document.getElementById('discussion-log');
+            discussionLog.innerHTML = '';
+            state.discussion_messages.slice(-20).forEach(msg => {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'message';
+                msgDiv.innerHTML = `
+                    <strong>${msg.player_name || msg.player_id}:</strong> ${msg.content}
+                `;
+                discussionLog.appendChild(msgDiv);
+            });
+            discussionLog.scrollTop = discussionLog.scrollHeight;
+            
+            // Update votes log
+            const votesLog = document.getElementById('votes-log');
+            votesLog.innerHTML = '';
+            state.votes.forEach(vote => {
+                const voteDiv = document.createElement('div');
+                voteDiv.className = 'vote-item';
+                const targetName = state.players.find(p => p.player_id === vote.target_id)?.name || 'abstain';
+                voteDiv.innerHTML = `
+                    <strong>${vote.voter_id}:</strong> voted for ${targetName}
+                    <div class="vote-explanation">${vote.explanation}</div>
+                `;
+                votesLog.appendChild(voteDiv);
+            });
+            
+            // Update history log
+            const historyLog = document.getElementById('history-log');
+            historyLog.innerHTML = '';
+            state.game_history.slice(-15).forEach(event => {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = 'history-item';
+                eventDiv.innerHTML = `
+                    <span class="event-time">Day ${event.day} - ${event.phase}</span>
+                    <span class="event-description">${event.description}</span>
+                `;
+                historyLog.appendChild(eventDiv);
+            });
+            historyLog.scrollTop = historyLog.scrollHeight;
+        }
+        
+        document.getElementById('pause-btn').addEventListener('click', () => {
+            fetch('/api/pause_game', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    isPaused = true;
+                    document.getElementById('pause-btn').style.display = 'none';
+                    document.getElementById('resume-btn').style.display = 'inline-block';
+                });
+        });
+        
+        document.getElementById('resume-btn').addEventListener('click', () => {
+            fetch('/api/resume_game', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    isPaused = false;
+                    document.getElementById('pause-btn').style.display = 'inline-block';
+                    document.getElementById('resume-btn').style.display = 'none';
+                    updateGameState();
+                });
+        });
+        
+        // Start polling for game state updates
+        updateInterval = setInterval(updateGameState, 2000); // Update every 2 seconds
+        updateGameState(); // Initial update
+    </script>
+</body>
+</html>
+

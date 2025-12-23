@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mafia AI - Game Setup</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Mafia AI Game</h1>
+        <p class="subtitle">Configure your game with AI players</p>
+        
+        <div class="setup-panel">
+            <h2>Game Setup</h2>
+            
+            <div class="form-group">
+                <label for="player-count">Number of Players:</label>
+                <input type="number" id="player-count" min="5" max="15" value="7">
+                <button id="update-players-btn">Update Players</button>
+            </div>
+            
+            <div id="players-container">
+                <!-- Player inputs will be generated here -->
+            </div>
+            
+            <div class="form-group">
+                <button id="start-game-btn" class="btn-primary">Start Game</button>
+            </div>
+            
+            <div id="status-message" class="status-message"></div>
+        </div>
+        
+        <div id="game-link" style="display: none;">
+            <a href="/game" class="btn-primary">Go to Game</a>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='game.js') }}"></script>
+    <script>
+        // Load available models
+        fetch('/api/available_models')
+            .then(response => response.json())
+            .then(data => {
+                window.availableModels = data.models || [];
+                initializePlayerInputs();
+            });
+        
+        let playerCount = 7;
+        
+        function initializePlayerInputs() {
+            const container = document.getElementById('players-container');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < playerCount; i++) {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player-input';
+                playerDiv.innerHTML = `
+                    <label>Player ${i + 1} Name:</label>
+                    <input type="text" class="player-name" value="Player ${i + 1}" data-index="${i}">
+                    <label>Model:</label>
+                    <select class="player-model" data-index="${i}">
+                        ${window.availableModels.map(model => 
+                            `<option value="${model}" ${i < window.availableModels.length ? (model === window.availableModels[i] ? 'selected' : '') : ''}>${model}</option>`
+                        ).join('')}
+                    </select>
+                `;
+                container.appendChild(playerDiv);
+            }
+        }
+        
+        document.getElementById('update-players-btn').addEventListener('click', () => {
+            playerCount = parseInt(document.getElementById('player-count').value);
+            if (playerCount >= 5 && playerCount <= 15) {
+                initializePlayerInputs();
+            } else {
+                alert('Player count must be between 5 and 15');
+            }
+        });
+        
+        document.getElementById('start-game-btn').addEventListener('click', () => {
+            const players = [];
+            const nameInputs = document.querySelectorAll('.player-name');
+            const modelInputs = document.querySelectorAll('.player-model');
+            
+            for (let i = 0; i < nameInputs.length; i++) {
+                players.push({
+                    name: nameInputs[i].value || `Player ${i + 1}`,
+                    model: modelInputs[i].value
+                });
+            }
+            
+            const statusMsg = document.getElementById('status-message');
+            statusMsg.textContent = 'Starting game...';
+            statusMsg.className = 'status-message info';
+            
+            fetch('/api/start_game', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ players })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    statusMsg.textContent = 'Error: ' + data.error;
+                    statusMsg.className = 'status-message error';
+                } else {
+                    statusMsg.textContent = 'Game started!';
+                    statusMsg.className = 'status-message success';
+                    document.getElementById('game-link').style.display = 'block';
+                    setTimeout(() => {
+                        window.location.href = '/game';
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                statusMsg.textContent = 'Error: ' + error.message;
+                statusMsg.className = 'status-message error';
+            });
+        });
+        
+        // Initialize on load
+        if (window.availableModels) {
+            initializePlayerInputs();
+        }
+    </script>
+</body>
+</html>
+
