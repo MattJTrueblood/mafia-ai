@@ -1,267 +1,194 @@
-"""Flask web application for the Mafia AI game."""
-from flask import Flask, render_template, jsonify, request
-import json
-import threading
-import time
-from typing import List
-from models import GameState, Player, Role, Phase
-from game_engine import GameEngine
-from openrouter_client import OpenRouterClient
-from player import AIPlayer
-from discussion_manager import DiscussionManager
-from voting_manager import VotingManager
-from night_actions import NightActionsManager
-from config import DEFAULT_MODELS, DEFAULT_DISCUSSION_TIME_LIMIT
+"""Flask application for Mafia AI game."""
+
+# CRITICAL: gevent.monkey_patch() MUST be called before any other imports
+from gevent import monkey
+monkey.patch_all()
+
+from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from game.game_state import GameState
+from game.phases import handle_night_phase, handle_day_phase
+from game.win_conditions import check_win_conditions
+from llm.openrouter_client import OpenRouterClient
+import config
 
 app = Flask(__name__)
+app.secret_key = "mafia-ai-secret-key"  # Change in production
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
-# Global game state
-game_engine = None
-ai_players = []
-game_thread = None
-game_lock = threading.Lock()
+# In-memory game storage (for MVP)
+games = {}
 
-
-class GameOrchestrator:
-    """Orchestrates the game flow."""
-    
-    def __init__(self, engine: GameEngine, players: List[AIPlayer]):
-        self.engine = engine
-        self.players = players
-        self.discussion_manager = None
-        self.voting_manager = None
-        self.night_actions_manager = None
-        self.is_paused = False
-    
-    def run_game_loop(self):
-        """Run the main game loop."""
-        while self.engine.is_running and not self.is_paused:
-            state = self.engine.get_state()
-            
-            if state.phase == Phase.NIGHT:
-                self._run_night_phase()
-            elif state.phase == Phase.DAY:
-                self.engine.transition_to_discussion()
-                self._run_discussion_phase()
-                self.engine.transition_to_voting()
-                self._run_voting_phase()
-                self.engine.transition_to_night()
-            
-            # Check win conditions
-            winner = self.engine.check_win_conditions()
-            if winner:
-                break
-            
-            # Small delay to prevent tight loop
-            time.sleep(0.5)
-    
-    def _run_night_phase(self):
-        """Execute the night phase."""
-        state = self.engine.get_state()
-        
-        # Initialize night actions manager
-        self.night_actions_manager = NightActionsManager(state, self.players)
-        
-        # Collect all night actions
-        updated_state = self.night_actions_manager.collect_all_actions()
-        self.engine.state = updated_state  # Update engine state
-        
-        # Process night actions
-        updated_state = self.night_actions_manager.process_actions()
-        self.engine.state = updated_state  # Update engine state
-        
-        # Transition to day
-        self.engine.transition_to_day()
-    
-    def _run_discussion_phase(self):
-        """Execute the discussion phase."""
-        state = self.engine.get_state()
-        
-        # Initialize discussion manager
-        self.discussion_manager = DiscussionManager(
-            state, self.players, time_limit=DEFAULT_DISCUSSION_TIME_LIMIT
-        )
-        self.discussion_manager.start_discussion()
-        
-        # Run discussion until time limit or natural end
-        max_messages = 50  # Safety limit
-        message_count = 0
-        
-        while not self.discussion_manager.should_end_discussion() and message_count < max_messages:
-            if self.is_paused:
-                break
-            
-            speaker = self.discussion_manager.get_next_speaker()
-            if not speaker:
-                break
-            
-            # Get message from AI player
-            recent_messages = self.discussion_manager.get_messages()[-5:]
-            message = speaker.get_discussion_message(
-                state,
-                recent_messages
-            )
-            
-            # Add message to discussion
-            updated_state = self.discussion_manager.add_message(message)
-            self.engine.state = updated_state  # Update engine state
-            state = updated_state  # Update local state reference
-            message_count += 1
-            
-            # Small delay between messages
-            time.sleep(1)
-    
-    def _run_voting_phase(self):
-        """Execute the voting phase."""
-        state = self.engine.get_state()
-        
-        # Initialize voting manager
-        self.voting_manager = VotingManager(state, self.players)
-        self.voting_manager.start_voting()
-        
-        # Collect votes sequentially
-        while not self.voting_manager.is_voting_complete():
-            if self.is_paused:
-                break
-            
-            voter = self.voting_manager.get_next_voter()
-            if not voter:
-                break
-            
-            # Get vote from AI player
-            current_votes = self.voting_manager.get_current_votes()
-            vote = voter.vote(state, current_votes)
-            
-            # Collect vote
-            updated_state = self.voting_manager.collect_vote(vote)
-            self.engine.state = updated_state  # Update engine state
-            state = updated_state  # Update local state reference
-            
-            # Small delay between votes
-            time.sleep(1)
-        
-        # Process all votes
-        lynched_player, updated_state = self.voting_manager.process_all_votes()
-        self.engine.state = updated_state
+# Initialize LLM client
+llm_client = OpenRouterClient()
 
 
-@app.route('/')
+def emit_game_state_update(game_id, game_state):
+    """Emit game state update to all clients watching this game."""
+    socketio.emit('game_state_update', game_state.to_dict(), room=game_id)
+
+
+def emit_discussion_status(game_id, status):
+    """Emit discussion status update for UI visibility."""
+    socketio.emit('discussion_status', status, room=game_id)
+
+
+@app.route("/")
 def index():
-    """Render the game setup page."""
-    return render_template('index.html')
+    """Setup page for player selection."""
+    return render_template("index.html", 
+                         default_models=config.DEFAULT_MODELS,
+                         model_pricing=config.MODEL_PRICING)
 
 
-@app.route('/game')
-def game():
-    """Render the active game view."""
-    return render_template('game.html')
-
-
-@app.route('/api/start_game', methods=['POST'])
+@app.route("/start_game", methods=["POST"])
 def start_game():
-    """Start a new game."""
-    global game_engine, ai_players, game_thread, game_orchestrator
+    """Initialize a new game with players."""
+    data = request.json
+    players = data.get("players", [])
     
-    with game_lock:
-        if game_engine and game_engine.is_running:
-            return jsonify({"error": "Game is already running"}), 400
-        
-        data = request.json
-        player_configs = data.get('players', [])
-        
-        if len(player_configs) < 5:
-            return jsonify({"error": "Need at least 5 players"}), 400
-        
-        # Create game engine
-        game_engine = GameEngine()
-        client = OpenRouterClient()
-        
-        # Create AI players
-        ai_players = []
-        for config in player_configs:
-            player = Player(
-                name=config['name'],
-                role=Role.TOWN,  # Will be assigned by engine
-                model=config.get('model', DEFAULT_MODELS[0]),
-                player_id=f"player_{len(ai_players)}"
-            )
-            ai_player = AIPlayer(player, client)
-            ai_players.append(ai_player)
-        
-        # Start game
-        player_configs_for_engine = [
-            {"name": p.player.name, "model": p.player.model}
-            for p in ai_players
-        ]
-        game_engine.start_game(player_configs_for_engine)
-        
-        # Create orchestrator
-        game_orchestrator = GameOrchestrator(game_engine, ai_players)
-        
-        # Start game thread
-        game_thread = threading.Thread(target=game_orchestrator.run_game_loop, daemon=True)
-        game_thread.start()
-        
-        return jsonify({"status": "started", "game_state": game_engine.get_state().to_dict()})
+    if len(players) < 3:
+        return jsonify({"error": "Need at least 3 players"}), 400
     
-    return jsonify({"error": "Failed to start game"}), 500
-
-
-@app.route('/api/game_state', methods=['GET'])
-def get_game_state():
-    """Get the current game state."""
-    global game_engine
+    # Create game state
+    game_state = GameState(players)
+    games[game_state.game_id] = game_state
     
-    with game_lock:
-        if not game_engine:
-            return jsonify({"error": "No game running"}), 404
+    return jsonify({"game_id": game_state.game_id, "redirect": url_for("game_view", game_id=game_state.game_id)})
+
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    pass
+
+
+@socketio.on('join_game')
+def handle_join_game(data):
+    """Handle client joining a game room."""
+    game_id = data.get('game_id')
+    if game_id in games:
+        join_room(game_id)
+        emit('joined_game', {'game_id': game_id})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    pass
+
+
+@app.route("/game/<game_id>")
+def game_view(game_id):
+    """Game view page."""
+    if game_id not in games:
+        return "Game not found", 404
+    
+    game_state = games[game_id]
+    return render_template("game.html", game_id=game_id, game_state=game_state.to_dict())
+
+
+@app.route("/game/<game_id>/state")
+def get_game_state(game_id):
+    """Get current game state as JSON."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    game_state = games[game_id]
+    return jsonify(game_state.to_dict())
+
+
+@app.route("/game/<game_id>/player/<player_name>/context")
+def get_player_context(game_id, player_name):
+    """Get the most recent LLM context for a player (for debugging prompts)."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    game_state = games[game_id]
+    player = game_state.get_player_by_name(player_name)
+
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    if not player.last_llm_context:
+        return jsonify({"error": "No context available yet"}), 404
+
+    return jsonify({
+        "player_name": player_name,
+        "context": player.last_llm_context
+    })
+
+
+@app.route("/game/<game_id>/next", methods=["POST"])
+def next_action(game_id):
+    """Advance to next phase/action."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+    
+    game_state = games[game_id]
+    
+    # Check if game is over
+    if game_state.game_over:
+        emit_game_state_update(game_id, game_state)
+        return jsonify({"message": "Game is over", "game_state": game_state.to_dict()})
+    
+    # Check win conditions first
+    winner = check_win_conditions(game_state)
+    if winner:
+        game_state.winner = winner
+        game_state.game_over = True
+        game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
+        emit_game_state_update(game_id, game_state)
+        return jsonify({"message": "Game over", "winner": winner, "game_state": game_state.to_dict()})
+    
+    try:
+        # Process current phase
+        if game_state.phase == "night":
+            # Handle night phase (with real-time updates during actions)
+            handle_night_phase(game_state, llm_client, game_id=game_id, emit_callback=emit_game_state_update)
+            
+            # Emit final update after night phase
+            emit_game_state_update(game_id, game_state)
+            
+            # Check win conditions after night
+            winner = check_win_conditions(game_state)
+            if winner:
+                game_state.winner = winner
+                game_state.game_over = True
+                game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
+                emit_game_state_update(game_id, game_state)
+            else:
+                # Transition to day phase (but don't process it yet)
+                game_state.phase = "day"
+                emit_game_state_update(game_id, game_state)
         
-        state = game_engine.get_state()
-        return jsonify(state.to_dict())
-
-
-@app.route('/api/pause_game', methods=['POST'])
-def pause_game():
-    """Pause the game."""
-    global game_orchestrator
-    
-    with game_lock:
-        if game_orchestrator:
-            game_orchestrator.is_paused = True
-            return jsonify({"status": "paused"})
+        elif game_state.phase == "day":
+            # Handle day phase (with real-time updates during discussion)
+            handle_day_phase(game_state, llm_client, game_id=game_id, emit_callback=emit_game_state_update, emit_status_callback=emit_discussion_status)
+            
+            # Emit final update after day phase
+            emit_game_state_update(game_id, game_state)
+            
+            # Check win conditions after day
+            winner = check_win_conditions(game_state)
+            if winner:
+                game_state.winner = winner
+                game_state.game_over = True
+                game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
+                emit_game_state_update(game_id, game_state)
+            else:
+                # Transition to night phase (but don't process it yet)
+                game_state.phase = "night"
+                emit_game_state_update(game_id, game_state)
         
-        return jsonify({"error": "No game running"}), 404
-
-
-@app.route('/api/resume_game', methods=['POST'])
-def resume_game():
-    """Resume the game."""
-    global game_orchestrator, game_thread
+        return jsonify({"message": "Phase completed", "game_state": game_state.to_dict()})
     
-    with game_lock:
-        if game_orchestrator:
-            game_orchestrator.is_paused = False
-            if not game_thread or not game_thread.is_alive():
-                game_thread = threading.Thread(
-                    target=game_orchestrator.run_game_loop, daemon=True
-                )
-                game_thread.start()
-            return jsonify({"status": "resumed"})
-        
-        return jsonify({"error": "No game running"}), 404
+    except Exception as e:
+        emit_game_state_update(game_id, game_state)
+        return jsonify({"error": str(e), "game_state": game_state.to_dict()}), 500
 
 
-@app.route('/api/available_models', methods=['GET'])
-def get_available_models():
-    """Get list of available models."""
-    return jsonify({"models": DEFAULT_MODELS})
-
-
-if __name__ == '__main__':
-    # Create necessary directories
-    import os
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('static', exist_ok=True)
-    
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    # Use eventlet for proper WebSocket support
+    socketio.run(app, debug=True, port=5000)
 

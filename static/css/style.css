@@ -1,0 +1,647 @@
+/* Basic styling for Mafia AI game */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    line-height: 1.6;
+    padding: 0;
+    margin: 0;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 10px;
+}
+
+h1 {
+    color: #ffffff;
+    margin-bottom: 20px;
+}
+
+h2 {
+    color: #e0e0e0;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+/* Setup page */
+#setup-form {
+    background: #2d2d2d;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-top: 20px;
+}
+
+.player-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+    align-items: center;
+}
+
+.player-row label {
+    min-width: 100px;
+    font-weight: 500;
+}
+
+.player-row input[type="text"] {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+.player-row select {
+    flex: 2;
+    padding: 8px 12px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 14px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-right: 10px;
+    margin-top: 10px;
+    transition: background-color 0.2s;
+}
+
+#add-player-btn, #remove-player-btn {
+    background-color: #3498db;
+    color: white;
+}
+
+#add-player-btn:hover, #remove-player-btn:hover {
+    background-color: #2980b9;
+}
+
+#start-game-btn {
+    background-color: #27ae60;
+    color: white;
+    font-weight: 600;
+    padding: 12px 30px;
+}
+
+#start-game-btn:hover {
+    background-color: #229954;
+}
+
+.error {
+    color: #ff6b6b;
+    background-color: #4a1f1f;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 20px;
+    border: 1px solid #6b2a2a;
+}
+
+/* Game page */
+.main-content {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.left-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.right-column {
+    flex: 0 0 700px;
+    position: sticky;
+    top: 20px;
+}
+
+#game-info {
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+}
+
+#game-info p {
+    margin: 8px 0;
+}
+
+.status {
+    font-weight: 600;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.status.game-over {
+    background-color: #d68910;
+    color: white;
+}
+
+#players-section {
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+}
+
+#event-log-section {
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+}
+
+#players-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.player-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 8px 12px;
+    border-left: 4px solid #555;
+    border-radius: 4px;
+    background-color: #1a1a1a;
+    font-size: 0.9em;
+}
+
+.player-card.town {
+    border-left-color: #27ae60;
+    background-color: #1e3a2e;
+}
+
+.player-card.mafia {
+    border-left-color: #e74c3c;
+    background-color: #3a1e1e;
+}
+
+.player-card.dead {
+    border-left-color: #666;
+    background-color: #2a2a2a;
+    opacity: 0.6;
+    color: #888;
+}
+
+.player-card .player-name {
+    font-weight: 600;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.player-card .player-role {
+    color: #b0b0b0;
+    font-style: italic;
+    min-width: 100px;
+    flex-shrink: 0;
+}
+
+.player-card .player-model {
+    color: #888;
+    font-size: 0.85em;
+    flex: 1;
+    text-align: right;
+}
+
+.player-card.dead .player-name,
+.player-card.dead .player-role,
+.player-card.dead .player-model {
+    color: #666;
+}
+
+/* Unified Event Log */
+#event-log {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    background-color: #1a1a1a;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #555;
+}
+
+.empty-state {
+    color: #888;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Event entries */
+.event-entry {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background-color: #2d2d2d;
+    border-radius: 4px;
+    border-left: 3px solid #555;
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+/* Event type-specific styling */
+.event-entry.event-phase_change {
+    border-left-color: #3498db;
+    background-color: #1e3a4a;
+}
+
+.event-entry.event-death {
+    border-left-color: #e74c3c;
+    background-color: #3a1e1e;
+}
+
+.event-entry.event-discussion {
+    border-left-color: #27ae60;
+}
+
+.event-entry.event-vote {
+    border-left-color: #f39c12;
+}
+
+.event-entry.event-vote_result {
+    border-left-color: #9b59b6;
+    background-color: #2d1e3a;
+}
+
+.event-entry.event-mafia_chat {
+    border-left-color: #e74c3c;
+    background-color: #3a1e1e;
+}
+
+.event-entry.event-role_action {
+    border-left-color: #1abc9c;
+    background-color: #1e3a35;
+    font-style: italic;
+}
+
+.event-entry.event-system {
+    border-left-color: #95a5a6;
+    color: #b0b0b0;
+}
+
+/* Phase indicator */
+.event-phase {
+    display: inline-block;
+    padding: 2px 6px;
+    margin-right: 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: 600;
+    background-color: #3a3a3a;
+    color: #b0b0b0;
+}
+
+/* Player names in events */
+.event-entry .player-name {
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.event-entry .player-name.town {
+    color: #27ae60;
+}
+
+.event-entry .player-name.mafia {
+    color: #e74c3c;
+}
+
+/* Event message */
+.event-message {
+    color: #e0e0e0;
+}
+
+/* Priority badges */
+.priority-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    margin: 0 6px;
+    border-radius: 3px;
+    font-size: 0.75em;
+    font-weight: 600;
+    vertical-align: middle;
+    line-height: 1.2;
+}
+
+.priority-badge.priority-urgent {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.priority-badge.priority-high {
+    background-color: #f39c12;
+    color: white;
+}
+
+.priority-badge.priority-normal {
+    background-color: #555;
+    color: #e0e0e0;
+}
+
+.priority-badge.priority-low {
+    background-color: #444;
+    color: #999;
+}
+
+/* Visibility badges for private events */
+.visibility-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    margin-left: 8px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    font-weight: 600;
+    background-color: #555;
+    color: #e0e0e0;
+}
+
+.visibility-mafia .visibility-badge {
+    background-color: #8e44ad;
+}
+
+.visibility-sheriff .visibility-badge {
+    background-color: #2980b9;
+}
+
+.visibility-doctor .visibility-badge {
+    background-color: #27ae60;
+}
+
+.visibility-vigilante .visibility-badge {
+    background-color: #c0392b;
+}
+
+#controls {
+    text-align: center;
+    margin-top: 30px;
+}
+
+.btn-primary {
+    background-color: #27ae60;
+    color: white;
+    padding: 12px 30px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn-primary:hover {
+    background-color: #229954;
+}
+
+.btn-primary:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background-color: #3498db;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #2980b9;
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Context Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    max-width: 900px;
+    width: 90%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #555;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #e0e0e0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+}
+
+.modal-close:hover {
+    color: #e0e0e0;
+}
+
+.modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #555;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.context-section {
+    margin-bottom: 20px;
+}
+
+.context-section h4 {
+    color: #b0b0b0;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+    text-transform: uppercase;
+}
+
+.context-content {
+    background-color: #1a1a1a;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #e0e0e0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.context-meta {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 15px;
+    font-size: 0.85em;
+    color: #888;
+    flex-wrap: wrap;
+}
+
+.context-meta span {
+    background-color: #3a3a3a;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Context button in player card */
+.btn-context {
+    background-color: #555;
+    color: #e0e0e0;
+    padding: 4px 8px;
+    font-size: 0.75em;
+    border-radius: 3px;
+    margin-left: auto;
+}
+
+.btn-context:hover {
+    background-color: #666;
+}
+
+.btn-context:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-copy {
+    background-color: #3498db;
+    color: white;
+}
+
+.btn-copy:hover {
+    background-color: #2980b9;
+}
+
+.btn-copy.copied {
+    background-color: #27ae60;
+}
+
+/* Discussion Status Panel */
+.discussion-status {
+    background: #2d2d2d;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+    border-left: 4px solid #3498db;
+}
+
+.discussion-status.hidden {
+    display: none;
+}
+
+.discussion-status h3 {
+    color: #3498db;
+    margin: 0 0 12px 0;
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.9em;
+}
+
+.status-label {
+    color: #888;
+    min-width: 100px;
+}
+
+.status-value {
+    color: #e0e0e0;
+    font-weight: 500;
+    text-align: right;
+}
+
+.status-value.waiting-highlight {
+    color: #f39c12;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-value.queue-list.has-items {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Waiting indicator on player cards */
+.player-card.waiting {
+    border-left-color: #f39c12 !important;
+    background-color: #3a3520 !important;
+}
+
+.waiting-indicator {
+    color: #f39c12;
+    font-weight: bold;
+    font-size: 1.2em;
+    animation: blink 1s step-end infinite;
+    margin-left: 8px;
+    letter-spacing: 2px;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+

@@ -3,128 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mafia AI - Game Setup</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Mafia AI - Setup</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Mafia AI Game</h1>
-        <p class="subtitle">Configure your game with AI players</p>
+        <h1>Mafia AI Game Setup</h1>
+        <p>Configure your AI players and start the game.</p>
         
-        <div class="setup-panel">
-            <h2>Game Setup</h2>
-            
-            <div class="form-group">
-                <label for="player-count">Number of Players:</label>
-                <input type="number" id="player-count" min="5" max="15" value="7">
-                <button id="update-players-btn">Update Players</button>
-            </div>
-            
+        <form id="setup-form">
             <div id="players-container">
-                <!-- Player inputs will be generated here -->
+                <!-- Players will be added here -->
             </div>
             
-            <div class="form-group">
-                <button id="start-game-btn" class="btn-primary">Start Game</button>
-            </div>
-            
-            <div id="status-message" class="status-message"></div>
-        </div>
+            <button type="button" id="add-player-btn">Add Player</button>
+            <button type="button" id="remove-player-btn">Remove Player</button>
+            <button type="submit" id="start-game-btn">Start Game</button>
+        </form>
         
-        <div id="game-link" style="display: none;">
-            <a href="/game" class="btn-primary">Go to Game</a>
-        </div>
+        <div id="error-message" class="error" style="display: none;"></div>
     </div>
     
-    <script src="{{ url_for('static', filename='game.js') }}"></script>
     <script>
-        // Load available models
-        fetch('/api/available_models')
-            .then(response => response.json())
-            .then(data => {
-                window.availableModels = data.models || [];
-                initializePlayerInputs();
-            });
+        const defaultModels = {{ default_models | tojson }};
+        const modelPricing = {{ model_pricing | tojson }};
+        // Friendly default names to use instead of "Player 1", "Player 2", ...
+        const defaultNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy'];
+        let playerCount = 7; // Default
         
-        let playerCount = 7;
-        
-        function initializePlayerInputs() {
+        // Initialize with default players
+        function initializePlayers() {
             const container = document.getElementById('players-container');
             container.innerHTML = '';
             
             for (let i = 0; i < playerCount; i++) {
-                const playerDiv = document.createElement('div');
-                playerDiv.className = 'player-input';
-                playerDiv.innerHTML = `
-                    <label>Player ${i + 1} Name:</label>
-                    <input type="text" class="player-name" value="Player ${i + 1}" data-index="${i}">
-                    <label>Model:</label>
-                    <select class="player-model" data-index="${i}">
-                        ${window.availableModels.map(model => 
-                            `<option value="${model}" ${i < window.availableModels.length ? (model === window.availableModels[i] ? 'selected' : '') : ''}>${model}</option>`
-                        ).join('')}
-                    </select>
-                `;
-                container.appendChild(playerDiv);
+                addPlayerRow(i + 1);
             }
         }
         
-        document.getElementById('update-players-btn').addEventListener('click', () => {
-            playerCount = parseInt(document.getElementById('player-count').value);
-            if (playerCount >= 5 && playerCount <= 15) {
-                initializePlayerInputs();
+        function formatPricing(modelId) {
+            if (modelPricing[modelId]) {
+                const p = modelPricing[modelId];
+                return ` ($${p.input.toFixed(2)}/$1M in, $${p.output.toFixed(2)}/$1M out)`;
+            }
+            return '';
+        }
+        
+        function addPlayerRow(num) {
+            const container = document.getElementById('players-container');
+            const div = document.createElement('div');
+            div.className = 'player-row';
+
+            // Pick a friendly default name when available
+            const defaultName = defaultNames[num - 1] || `Player ${num}`;
+
+            // Randomly select a default model
+            const randomModel = defaultModels[Math.floor(Math.random() * defaultModels.length)];
+
+            div.innerHTML = `
+                <label>Player ${num}:</label>
+                <input type="text" name="player${num}_name" placeholder="${defaultName}" value="${defaultName}" required>
+                <select name="player${num}_model" required>
+                    ${defaultModels.map(model => {
+                        const pricing = formatPricing(model);
+                        const selected = model === randomModel ? ' selected' : '';
+                        return `<option value="${model}"${selected}>${model}${pricing}</option>`;
+                    }).join('')}
+                </select>
+            `;
+            container.appendChild(div);
+        }
+        
+        document.getElementById('add-player-btn').addEventListener('click', () => {
+            playerCount++;
+            addPlayerRow(playerCount);
+        });
+        
+        document.getElementById('remove-player-btn').addEventListener('click', () => {
+            if (playerCount > 3) {
+                const container = document.getElementById('players-container');
+                container.removeChild(container.lastChild);
+                playerCount--;
             } else {
-                alert('Player count must be between 5 and 15');
+                alert('Need at least 3 players');
             }
         });
         
-        document.getElementById('start-game-btn').addEventListener('click', () => {
-            const players = [];
-            const nameInputs = document.querySelectorAll('.player-name');
-            const modelInputs = document.querySelectorAll('.player-model');
+        document.getElementById('setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            for (let i = 0; i < nameInputs.length; i++) {
-                players.push({
-                    name: nameInputs[i].value || `Player ${i + 1}`,
-                    model: modelInputs[i].value
-                });
+            const formData = new FormData(e.target);
+            const players = [];
+            
+            for (let i = 1; i <= playerCount; i++) {
+                const name = formData.get(`player${i}_name`);
+                const model = formData.get(`player${i}_model`);
+                if (name && model) {
+                    players.push({ name, model });
+                }
             }
             
-            const statusMsg = document.getElementById('status-message');
-            statusMsg.textContent = 'Starting game...';
-            statusMsg.className = 'status-message info';
+            if (players.length < 3) {
+                showError('Need at least 3 players');
+                return;
+            }
             
-            fetch('/api/start_game', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ players })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    statusMsg.textContent = 'Error: ' + data.error;
-                    statusMsg.className = 'status-message error';
+            try {
+                const response = await fetch('/start_game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ players })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    window.location.href = data.redirect;
                 } else {
-                    statusMsg.textContent = 'Game started!';
-                    statusMsg.className = 'status-message success';
-                    document.getElementById('game-link').style.display = 'block';
-                    setTimeout(() => {
-                        window.location.href = '/game';
-                    }, 1000);
+                    showError(data.error || 'Failed to start game');
                 }
-            })
-            .catch(error => {
-                statusMsg.textContent = 'Error: ' + error.message;
-                statusMsg.className = 'status-message error';
-            });
+            } catch (error) {
+                showError('Error starting game: ' + error.message);
+            }
         });
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
         
         // Initialize on load
-        if (window.availableModels) {
-            initializePlayerInputs();
-        }
+        initializePlayers();
     </script>
 </body>
 </html>

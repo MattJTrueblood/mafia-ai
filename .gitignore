@@ -1,0 +1,32 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment / env files
+venv/
+env/
+.env
+
+# IDE/editor configs
+.vscode/
+.idea/
+
+# Claude assistant files
+.claude/
+.claude
+
+# Debug outputs
+*debug*
+*.debug
+debug.log
+vigilante_night0_context_debug.txt
+*vigilante*_debug*
+
+# OpenRouter key file (explicit filename in repo)
+openrouter_key.txt
+
+# Misc
+.DS_Store
+Thumbs.db
+openrouter_key.txt

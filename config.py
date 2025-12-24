@@ -1,49 +1,50 @@
-"""Configuration management for the Mafia AI game."""
+"""Configuration module for loading API keys and game settings."""
+
 import os
-from pathlib import Path
 
 
-def load_api_key():
-    """Load OpenRouter API key from file."""
-    key_file = Path("openrouter key.txt")
-    if key_file.exists():
-        with open(key_file, "r") as f:
-            return f.read().strip()
-    # Fallback to environment variable
-    return os.getenv("OPENROUTER_API_KEY", "")
+def load_openrouter_key():
+    """Load OpenRouter API key from openrouter_key.txt file."""
+    key_path = os.path.join(os.path.dirname(__file__), "openrouter_key.txt")
+    try:
+        with open(key_path, "r") as f:
+            key = f.read().strip()
+        if not key:
+            raise ValueError("OpenRouter API key file is empty")
+        return key
+    except FileNotFoundError:
+        raise FileNotFoundError(f"OpenRouter API key file not found at {key_path}")
 
 
-# OpenRouter API configuration
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_API_KEY = load_api_key()
+# Game configuration
+DEFAULT_PLAYER_COUNT = 7
 
-# Default game settings
-DEFAULT_DISCUSSION_TIME_LIMIT = 300  # 5 minutes in seconds
-DEFAULT_VOTING_TIME_LIMIT = 120  # 2 minutes in seconds
-DEFAULT_NIGHT_TIME_LIMIT = 180  # 3 minutes in seconds
-
-# Available roles
-ROLES = {
-    "Mafia": "mafia",
-    "Town": "town",
-    "Sheriff": "sheriff",
-    "Doctor": "doctor",
-    "Vigilante": "vigilante"
-}
-
-# Game phases
-PHASE_DAY = "day"
-PHASE_NIGHT = "night"
-PHASE_DISCUSSION = "discussion"
-PHASE_VOTING = "voting"
-PHASE_GAME_OVER = "game_over"
-
-# Default models (can be overridden per player)
+# Default models with pricing (per 1M tokens: input / output)
+# Prices verified from openrouter.ai model pages
 DEFAULT_MODELS = [
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "google/gemini-flash-1.5",
-    "mistralai/mistral-7b-instruct:free",
-    "openai/gpt-3.5-turbo",
-    "anthropic/claude-3-haiku",
+    "qwen/qwen-turbo",                              # $0.05 / $0.20
+    "mistralai/mistral-small-3.2-24b-instruct",     # $0.06 / $0.18
+    "meta-llama/llama-3.3-70b-instruct",            # $0.10 / $0.32
+    "meta-llama/llama-4-maverick",                  # $0.15 / $0.60
+    "x-ai/grok-4-fast",                             # $0.20 / $0.50 (starting at)
+    "deepseek/deepseek-v3.2",                       # $0.224 / $0.32
+    "openai/gpt-5-mini",                            # $0.25 / $2.00
+    "openai/gpt-4.1-mini",                          # $0.40 / $1.60 (starting at)
+    "mistralai/mistral-large-2512",                 # $0.50 / $1.50
+    "openai/gpt-oss-20b",                           # $0.03 / $0.14
 ]
 
+# Model pricing dictionary (per 1M tokens: input / output)
+# Used for displaying pricing in the UI
+MODEL_PRICING = {
+    "qwen/qwen-turbo": {"input": 0.05, "output": 0.20},
+    "mistralai/mistral-small-3.2-24b-instruct": {"input": 0.06, "output": 0.18},
+    "meta-llama/llama-3.3-70b-instruct": {"input": 0.10, "output": 0.32},
+    "meta-llama/llama-4-maverick": {"input": 0.15, "output": 0.60},
+    "x-ai/grok-4-fast": {"input": 0.20, "output": 0.50},          # starting at
+    "deepseek/deepseek-v3.2": {"input": 0.224, "output": 0.32},
+    "openai/gpt-5-mini": {"input": 0.25, "output": 2.00},
+    "openai/gpt-4.1-mini": {"input": 0.40, "output": 1.60},       # starting at
+    "mistralai/mistral-large-2512": {"input": 0.50, "output": 1.50},
+    "openai/gpt-oss-20b": {"input": 0.03, "output": 0.14},
+}
