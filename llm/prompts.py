@@ -438,84 +438,82 @@ Example: {{"target": null, "reasoning": "I don't have enough information yet to 
     return prompt
 
 
-def build_day_discussion_priority_prompt(game_state, player: "Player", accused_queue: set = None, questioned_queue: set = None) -> str:
-    """Build prompt for players to indicate their priority to speak.
+def build_interrupt_check_prompt(game_state, player: "Player") -> str:
+    """Build prompt for players to indicate if they want to interrupt or pass.
+
+    This is used in the round-robin discussion system. Players can:
+    - Interrupt if they have urgent information that can't wait
+    - Pass to skip their speaking turn this round
+    - Wait for their normal turn to speak
 
     Args:
         game_state: Current game state
         player: The player being prompted
-        accused_queue: Set of player names who were recently accused
-        questioned_queue: Set of player names who were recently questioned
     """
     context = build_game_context(game_state, viewing_player=player)
-    rules = build_game_rules()
 
-    # Get strategic guidance based on role
-    if player.role and player.role.name == "Mafia":
-        strategic_guidance = build_mafia_strategic_guidance()
-    elif player.role:
-        strategic_guidance = build_town_strategic_guidance()
-        if player.role.name == "Sheriff":
-            strategic_guidance += build_sheriff_strategic_guidance()
-        elif player.role.name == "Doctor":
-            strategic_guidance += build_doctor_strategic_guidance()
-        elif player.role.name == "Vigilante":
-            strategic_guidance += build_vigilante_strategic_guidance()
-    else:
-        strategic_guidance = ""
+    # Get role-specific context for the player to consider
+    role_context = ""
+    if player.role and player.role.name == "Sheriff":
+        if hasattr(player.role, 'investigations') and player.role.investigations:
+            role_context = "\nYour investigation results (private):\n"
+            for name, result in player.role.investigations:
+                role_context += f"- {name}: {result}\n"
 
-    # Build context about who needs to respond
-    queue_context = ""
-    accused_list = list(accused_queue) if accused_queue else []
-    questioned_list = list(questioned_queue) if questioned_queue else []
-
-    if accused_list or questioned_list:
-        queue_context = "\n=== PLAYERS WHO SHOULD RESPOND ===\n"
-        if accused_list:
-            queue_context += f"Recently accused of being mafia: {', '.join(accused_list)}\n"
-        if questioned_list:
-            queue_context += f"Recently asked a direct question: {', '.join(questioned_list)}\n"
-        queue_context += "These players should probably speak before others.\n"
-        queue_context += "=== END ===\n"
-
-    prompt = f"""{rules}You are {player.name}.
-{strategic_guidance}
+    prompt = f"""You are {player.name}.
 
 {context}
-{queue_context}
+{role_context}
 
-You are in the day phase discussion. Before deciding to speak, consider:
+Another player is about to speak in the discussion. You have two decisions to make:
 
-1. Was someone just accused or questioned? They should probably respond first.
-2. Do YOU have information that could change who gets voted out today?
-3. Would your message add something NEW, or just repeat what's been said?
+1. Do you need to INTERRUPT?
+ONLY interrupt if you have something URGENT that cannot wait for your regular turn:
+- You need to defend yourself against a direct accusation
+- You have critical information that could change the vote (e.g., you're the Sheriff with proof someone is mafia)
+- Someone is about to be wrongly lynched and you can stop it
+- Your team's win/loss is at stake and you must speak NOW
 
-GUIDELINES:
-- If someone else clearly should speak first (they were accused/questioned) → priority 1-2, or set wants_to_speak: false
-- If you have NEW, important information (evidence, defense, role reveal) → priority 7-10
-- If you have a minor point that adds something new → priority 3-6
-- If you would just be repeating or adding filler → set wants_to_speak: false
+Do NOT interrupt for:
+- General observations or suspicions
+- Agreeing with what others said
+- Minor points that can wait for your turn
 
-IMPORTANT: Speaking without important information makes it easier for mafia to blend in.
-If you don't have something meaningful to add, stay quiet and let relevant players have their conversation.
+2. Do you want to PASS your speaking turn this round?
+Choose to pass if:
+- You have nothing meaningful to add right now
+- You've already made your points and don't want to repeat yourself
+- You're waiting to see how others react before speaking again
 
-Respond with a JSON object containing:
-- "priority": a number from 1-10 indicating how urgent your message is
-- "wants_to_speak": true if you have something NEW and meaningful to say, false otherwise
+Do NOT pass if:
+- You have observations, suspicions, or questions to share
+- You need to respond to something said about you
+- You have information that could help your team
 
-Example (accused player): {{"priority": 9, "wants_to_speak": true}}
-Example (has new info): {{"priority": 7, "wants_to_speak": true}}
-Example (someone else should speak): {{"priority": 2, "wants_to_speak": false}}
-Example (nothing to add): {{"priority": 1, "wants_to_speak": false}}"""
+Remember: Interrupting too often looks suspicious. Passing too often also looks suspicious - engaged town members usually have something to say.
+
+Respond with a JSON object:
+- "wants_to_interrupt": true ONLY if you have urgent information, false otherwise
+- "wants_to_pass": true if you want to skip your speaking turn this round, false if you want to speak
+
+Example (urgent - defend yourself): {{"wants_to_interrupt": true, "wants_to_pass": false}}
+Example (nothing urgent, will speak): {{"wants_to_interrupt": false, "wants_to_pass": false}}
+Example (nothing to add, skip turn): {{"wants_to_interrupt": false, "wants_to_pass": true}}"""
 
     return prompt
 
 
-def build_day_discussion_prompt(game_state, player: "Player") -> str:
-    """Build prompt for day phase discussion."""
+def build_day_discussion_prompt(game_state, player: "Player", is_interrupt: bool = False) -> str:
+    """Build prompt for day phase discussion.
+
+    Args:
+        game_state: Current game state
+        player: The player speaking
+        is_interrupt: Whether this is an interrupt (urgent) message
+    """
     context = build_game_context(game_state, viewing_player=player)
     rules = build_game_rules()
-    
+
     # Get player's role info and strategic guidance
     if player.role and player.role.name == "Mafia":
         role_info = f"You are {player.name}, a member of the MAFIA FACTION."
@@ -562,7 +560,7 @@ def build_day_discussion_prompt(game_state, player: "Player") -> str:
 CRITICAL: Your message will be PUBLIC and visible to ALL players.
 - NEVER reveal that you are Mafia or mention your team
 - NEVER reference your fellow mafia members or mafia coordination
-- Non-mafia players cannot see [Mafia Discussion] messages.  Keep these secret.
+- Non-mafia players cannot see [Mafia Discussion] messages. Keep these secret.
 - Speak as if you are a town member trying to find mafia
 - Only reference publicly available information
 """
@@ -582,7 +580,7 @@ IMPORTANT: Your message will be PUBLIC and visible to ALL players.
 - Be careful about revealing your specific role unless strategically necessary
 - Consider whether revealing private information (investigations, etc.) helps or hurts
 """
-    
+
     # Day-1 specific guidance
     day1_rules = ""
     if game_state.day_number == 1:
@@ -592,8 +590,8 @@ DAY 1 GUIDELINES - Limited information available:
 - Valid Day 1 observations include: posting frequency, hedging language, deflecting questions, mirroring others' opinions, contradictions, unusual voting patterns.
 - If you have no concrete observation, try asking probing questions, make a labeled "pressure" statement to generate reactions, or express uncertainty.
 - Do NOT invent rationales or claim to have information you don't have.
-- This is the start of the game.  There is no previous round or discussion history beyond what you have seen.
-- Because it is early in the game, most players will not have spoken yet.  Try to avoid pressing players this early based soley on lack of participation.
+- This is the start of the game. There is no previous round or discussion history beyond what you have seen.
+- Because it is early in the game, most players will not have spoken yet. Try to avoid pressing players this early based solely on lack of participation.
 """
 
     # Output quality rules
@@ -603,7 +601,15 @@ OUTPUT QUALITY RULES:
 - Do NOT simply recap what others have said without adding a NEW inference or angle.
 - Avoid vague filler like "we need to find mafia" or "let's work together" or "let's discuss last night's kill" unless followed by a specific observation.
 - Every message should either: make a specific observation, ask a pointed question, defend against an accusation, or express a concrete suspicion with reasoning.
-- If you do not have any important information to add (e.g. your message is vague filler), keep your message's priority low to give room for players with more important things to say.
+"""
+
+    # Interrupt-specific context
+    interrupt_context = ""
+    if is_interrupt:
+        interrupt_context = """
+YOU ARE INTERRUPTING because you indicated you have urgent information.
+This should be something critical: a role reveal, defending against an accusation, or information that could change the vote.
+Make your point clearly and concisely.
 """
 
     prompt = f"""{rules}{role_info}
@@ -614,6 +620,7 @@ OUTPUT QUALITY RULES:
 {public_warning_discussion}
 {day1_rules}
 {output_rules}
+{interrupt_context}
 
 You are in the day phase discussion. All surviving players can discuss what happened and share information. You should:
 - Analyze what happened during the night
@@ -621,65 +628,20 @@ You are in the day phase discussion. All surviving players can discuss what happ
 - Look for suspicious behavior
 - Defend yourself if accused
 
-You have been selected to speak now. What do you want to say? Remember: your message will be public and must only reference PUBLIC_FACTS.
+It's your turn to speak. You chose to speak (you did not pass), so you MUST provide a meaningful message.
 
-Respond with a JSON object containing:
-- "priority": a number from 1-10 indicating how urgent your message is (10 = very urgent, like defending against an accusation)
-- "message": what you want to say (keep it concise, 1-2 sentences). This will be visible to everyone.
-- "accused": (optional) list of player names you are DIRECTLY ACCUSING of being mafia in your message. Only include names if you make a clear accusation like "I think X is mafia" or "X is suspicious".
-- "questioned": (optional) list of player names you are DIRECTLY ASKING A QUESTION in your message. Only include names if you ask them something specific like "X, what do you think about Y?" or "X, where were you last night?"
+IMPORTANT:
+- Write your message directly as plain text (1-3 sentences). Do NOT use JSON format.
+- You MUST say something substantive - you already had the option to pass and chose not to.
+- Your message will be visible to all players. Only reference publicly available information.
 
-Example (responding to accusation): {{"priority": 8, "message": "I need to defend myself - I'm not mafia, and here's why...", "accused": [], "questioned": []}}
-Example (probing for reactions): {{"priority": 5, "message": "Alice, what are your thoughts on last night's kill?", "accused": [], "questioned": ["Alice"]}}
-Example (making accusation): {{"priority": 7, "message": "I think Bob is suspicious - he's been deflecting questions all day.", "accused": ["Bob"], "questioned": []}}
-Example (role reveal): {{"priority": 10, "message": "I'm the sheriff. I investigated Bob, he is mafia! Alice, we have to vote him out!", "accused": ["Bob"], "questioned": ["Alice"]}}
-Example (no important info): {{"priority": 3, "message": "It seems like Charlie died last night. Let's not jump to conclusions.", "accused": [], "questioned": []}}"""
+Example messages:
+- "I think Bob is acting suspicious - he's been deflecting every question asked of him."
+- "Alice, what are your thoughts on last night's kill? You've been quiet."
+- "I need to defend myself here. I'm not mafia, and the fact that I voted for Charlie yesterday should show that."
+- "I'm the Sheriff. I investigated Bob last night and he is MAFIA. We need to vote him out."
 
-    return prompt
-
-
-def build_urgent_check_prompt(game_state, player: "Player") -> str:
-    """Build prompt for the urgent escape hatch check.
-
-    This is used when no one wants to speak during discussion, to check
-    if anyone has truly critical information before ending discussion.
-    """
-    context = build_game_context(game_state, viewing_player=player)
-    rules = build_game_rules()
-
-    # Get role-specific context
-    role_context = ""
-    if player.role and player.role.name == "Sheriff":
-        if hasattr(player.role, 'investigations') and player.role.investigations:
-            role_context = "\nYour investigation results (private):\n"
-            for name, result in player.role.investigations:
-                role_context += f"- {name}: {result}\n"
-
-    prompt = f"""{rules}You are {player.name}.
-
-{context}
-{role_context}
-
-Discussion is about to end. Do you have CRITICAL information that could change who the town should vote for today?
-
-ONLY answer YES if you have one of these:
-- A role reveal that would help town (e.g., you're sheriff with investigation results showing someone is mafia)
-- Proof of someone's guilt or innocence that hasn't been shared
-- The town is about to vote for the wrong person and you can stop it
-
-Do NOT answer yes for:
-- General suspicions without evidence
-- Wanting to repeat a point someone already made
-- Mild disagreements with the discussion
-- Vague feelings that something is wrong
-
-Respond with a JSON object containing:
-- "has_critical_info": true ONLY if you have game-changing information, false otherwise
-- "reason": brief explanation (1 sentence)
-
-Example (sheriff with mafia result): {{"has_critical_info": true, "reason": "I investigated Bob and he is mafia - town needs to know before voting."}}
-Example (nothing critical): {{"has_critical_info": false, "reason": "I have suspicions but no concrete evidence to share."}}
-Example (already shared): {{"has_critical_info": false, "reason": "My information has already been discussed."}}"""
+Your message:"""
 
     return prompt
 

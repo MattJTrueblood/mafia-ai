@@ -4,12 +4,14 @@
 from gevent import monkey
 monkey.patch_all()
 
+import gevent
+from gevent.event import Event
+
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from game.game_state import GameState
-from game.phases import handle_night_phase, handle_day_phase
-from game.win_conditions import check_win_conditions
-from llm.openrouter_client import OpenRouterClient
+from game.step_processor import process_step
+from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 import config
 
 app = Flask(__name__)
@@ -18,6 +20,21 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # In-memory game storage (for MVP)
 games = {}
+
+
+class GameControl:
+    """Control state for a running game loop."""
+
+    def __init__(self):
+        self.pause_event = Event()  # Set when game is paused
+        self.cancel_event = Event()  # Set to cancel current LLM call
+        self.loop_greenlet = None  # The running game loop greenlet
+        self.checkpoint = None  # State before current action (for retry)
+        self.is_running = False  # Whether the loop is active
+
+
+# Game control state per game
+game_controls = {}
 
 # Initialize LLM client
 llm_client = OpenRouterClient()
@@ -31,6 +48,62 @@ def emit_game_state_update(game_id, game_state):
 def emit_discussion_status(game_id, status):
     """Emit discussion status update for UI visibility."""
     socketio.emit('discussion_status', status, room=game_id)
+
+
+def game_loop(game_id: str):
+    """
+    Main game loop running as a greenlet.
+    Runs continuously until game is over or loop is killed.
+
+    Uses step-based execution: each iteration processes exactly one atomic step.
+    The game can be paused between any two steps and will resume exactly where it left off.
+    """
+    if game_id not in games or game_id not in game_controls:
+        return
+
+    game_state = games[game_id]
+    control = game_controls[game_id]
+    control.is_running = True
+
+    try:
+        while not game_state.game_over:
+            # Wait while paused
+            while control.pause_event.is_set():
+                gevent.sleep(0.1)  # Cooperative yield
+
+            # Clear cancel event when resuming
+            control.cancel_event.clear()
+
+            try:
+                # Execute a single step
+                process_step(
+                    game_state=game_state,
+                    llm_client=llm_client,
+                    cancel_event=control.cancel_event,
+                    emit_callback=emit_game_state_update,
+                    emit_status_callback=emit_discussion_status,
+                    game_id=game_id,
+                )
+
+                # Small yield to allow other greenlets to run
+                gevent.sleep(0)
+
+            except LLMCancelledException:
+                # LLM call was cancelled - treat as pause
+                control.pause_event.set()
+                emit_game_state_update(game_id, game_state)
+                socketio.emit('pause_state', {'paused': True}, room=game_id)
+                continue
+            except Exception as e:
+                # Log error but don't crash the loop
+                game_state.add_event("system", f"Error: {str(e)}", "all")
+                emit_game_state_update(game_id, game_state)
+                # Pause on error so user can investigate
+                control.pause_event.set()
+                socketio.emit('pause_state', {'paused': True}, room=game_id)
+
+    finally:
+        control.is_running = False
 
 
 @app.route("/")
@@ -119,73 +192,61 @@ def get_player_context(game_id, player_name):
     })
 
 
-@app.route("/game/<game_id>/next", methods=["POST"])
-def next_action(game_id):
-    """Advance to next phase/action."""
+@app.route("/game/<game_id>/start", methods=["POST"])
+def start_game_loop(game_id):
+    """Start the continuous game loop."""
     if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
-    
-    game_state = games[game_id]
-    
-    # Check if game is over
-    if game_state.game_over:
-        emit_game_state_update(game_id, game_state)
-        return jsonify({"message": "Game is over", "game_state": game_state.to_dict()})
-    
-    # Check win conditions first
-    winner = check_win_conditions(game_state)
-    if winner:
-        game_state.winner = winner
-        game_state.game_over = True
-        game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
-        emit_game_state_update(game_id, game_state)
-        return jsonify({"message": "Game over", "winner": winner, "game_state": game_state.to_dict()})
-    
-    try:
-        # Process current phase
-        if game_state.phase == "night":
-            # Handle night phase (with real-time updates during actions)
-            handle_night_phase(game_state, llm_client, game_id=game_id, emit_callback=emit_game_state_update)
-            
-            # Emit final update after night phase
-            emit_game_state_update(game_id, game_state)
-            
-            # Check win conditions after night
-            winner = check_win_conditions(game_state)
-            if winner:
-                game_state.winner = winner
-                game_state.game_over = True
-                game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
-                emit_game_state_update(game_id, game_state)
-            else:
-                # Transition to day phase (but don't process it yet)
-                game_state.phase = "day"
-                emit_game_state_update(game_id, game_state)
-        
-        elif game_state.phase == "day":
-            # Handle day phase (with real-time updates during discussion)
-            handle_day_phase(game_state, llm_client, game_id=game_id, emit_callback=emit_game_state_update, emit_status_callback=emit_discussion_status)
-            
-            # Emit final update after day phase
-            emit_game_state_update(game_id, game_state)
-            
-            # Check win conditions after day
-            winner = check_win_conditions(game_state)
-            if winner:
-                game_state.winner = winner
-                game_state.game_over = True
-                game_state.add_event("system", f"Game over! {'Mafia' if winner == 'mafia' else 'Town'} wins!", "all")
-                emit_game_state_update(game_id, game_state)
-            else:
-                # Transition to night phase (but don't process it yet)
-                game_state.phase = "night"
-                emit_game_state_update(game_id, game_state)
-        
-        return jsonify({"message": "Phase completed", "game_state": game_state.to_dict()})
-    
-    except Exception as e:
-        emit_game_state_update(game_id, game_state)
-        return jsonify({"error": str(e), "game_state": game_state.to_dict()}), 500
+
+    if game_id in game_controls and game_controls[game_id].is_running:
+        return jsonify({"error": "Game already running"}), 400
+
+    # Create control structure
+    control = GameControl()
+    game_controls[game_id] = control
+
+    # Spawn game loop greenlet
+    control.loop_greenlet = gevent.spawn(game_loop, game_id)
+
+    return jsonify({"started": True})
+
+
+@app.route("/game/<game_id>/pause", methods=["POST"])
+def toggle_pause(game_id):
+    """Toggle pause state for a game."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    if game_id not in game_controls:
+        return jsonify({"error": "Game not started"}), 400
+
+    control = game_controls[game_id]
+
+    if control.pause_event.is_set():
+        # Resume: clear both events
+        control.cancel_event.clear()
+        control.pause_event.clear()
+    else:
+        # Pause: set both events (cancel in-flight LLM call)
+        control.pause_event.set()
+        control.cancel_event.set()
+
+    is_paused = control.pause_event.is_set()
+    socketio.emit('pause_state', {'paused': is_paused}, room=game_id)
+    return jsonify({"paused": is_paused})
+
+
+@app.route("/game/<game_id>/pause/state")
+def get_pause_state(game_id):
+    """Get current pause state for a game."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    if game_id not in game_controls:
+        return jsonify({"paused": False, "started": False})
+
+    control = game_controls[game_id]
+    return jsonify({"paused": control.pause_event.is_set(), "started": control.is_running})
 
 
 if __name__ == "__main__":

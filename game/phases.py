@@ -3,18 +3,22 @@
 import json
 import random
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from .game_state import GameState, Player
 from .win_conditions import check_win_conditions
-from llm.openrouter_client import OpenRouterClient
+from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from llm.prompts import (
     build_night_prompt,
     build_day_discussion_prompt,
-    build_day_discussion_priority_prompt,
+    build_interrupt_check_prompt,
     build_day_voting_prompt,
     build_mafia_vote_prompt,
-    build_urgent_check_prompt,
 )
+
+
+class GamePausedException(Exception):
+    """Raised when the game is paused during phase execution."""
+    pass
 
 
 # Structured output schemas
@@ -36,60 +40,62 @@ ACTION_SCHEMA = {
     "required": ["target", "reasoning"]
 }
 
-DISCUSSION_SCHEMA = {
+INTERRUPT_SCHEMA = {
     "type": "object",
     "properties": {
-        "priority": {"type": "integer"},
-        "message": {"type": "string"},
-        "accused": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Names of players you accused of being mafia"
-        },
-        "questioned": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Names of players you directly asked a question"
-        }
+        "wants_to_interrupt": {"type": "boolean"}
     },
-    "required": ["priority", "message"]
-}
-
-PRIORITY_ONLY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "priority": {"type": "integer"},
-        "wants_to_speak": {"type": "boolean"}
-    },
-    "required": ["priority", "wants_to_speak"]
-}
-
-URGENT_CHECK_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "has_critical_info": {"type": "boolean"},
-        "reason": {"type": "string"}
-    },
-    "required": ["has_critical_info"]
+    "required": ["wants_to_interrupt"]
 }
 
 
-def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game_id: str = None, emit_callback=None) -> Dict:
+def handle_night_phase(
+    game_state: GameState,
+    llm_client: OpenRouterClient,
+    game_id: str = None,
+    emit_callback=None,
+    control: Any = None
+) -> Dict:
     """
     Handle a complete night phase.
-    
+
     Args:
         game_state: Current game state
         llm_client: LLM client for making API calls
         game_id: Optional game ID for emitting real-time updates
         emit_callback: Optional callback function(game_id, game_state) to emit updates
-    
+        control: Optional GameControl instance for pause/cancel support
+
     Returns:
         Dict with night action results
+
+    Raises:
+        GamePausedException: If the game is paused during execution
     """
+
+    def check_pause():
+        """Check if game is paused and raise exception if so."""
+        if control and control.pause_event.is_set():
+            raise GamePausedException("Game paused")
+
+    def get_cancel_event():
+        """Get the cancel event from control, or None."""
+        return control.cancel_event if control else None
+
+    def make_checkpoint(action_type: str, context: dict = None):
+        """Create a checkpoint before an action."""
+        if control:
+            control.checkpoint = game_state.create_checkpoint(action_type, context)
+
+    def restore_and_raise(message: str):
+        """Restore from checkpoint and raise GamePausedException."""
+        if control and control.checkpoint:
+            game_state.restore_from_checkpoint(control.checkpoint)
+        raise GamePausedException(message)
+
     game_state.phase = "night"
     game_state.add_event("phase_change", f"Night {game_state.day_number + 1} begins.", "all")
-    
+
     # Emit update at start of night
     if emit_callback and game_id:
         emit_callback(game_id, game_state)
@@ -110,11 +116,14 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
     mafia_players = game_state.get_players_by_role("Mafia")
     if mafia_players:
         mafia_votes = []
-        for mafia in mafia_players:
-            previous_votes = [{"player": v["player"], "target": v.get("target"), "reasoning": v.get("reasoning", "")} 
+        for i, mafia in enumerate(mafia_players):
+            check_pause()  # Check before each player's action
+            make_checkpoint("mafia_vote", {"player_index": i, "previous_votes": list(mafia_votes)})
+
+            previous_votes = [{"player": v["player"], "target": v.get("target"), "reasoning": v.get("reasoning", "")}
                             for v in mafia_votes]
             prompt = build_mafia_vote_prompt(game_state, mafia, previous_votes)
-            
+
             messages = [{"role": "user", "content": prompt}]
             mafia.last_llm_context = {
                 "messages": messages,
@@ -123,12 +132,18 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
                 "phase": game_state.phase,
                 "day": game_state.day_number
             }
-            response = llm_client.call_model(
-                mafia.model,
-                messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "mafia_vote", "schema": ACTION_SCHEMA}},
-                temperature=0.7
-            )
+
+            try:
+                response = llm_client.call_model(
+                    mafia.model,
+                    messages,
+                    response_format={"type": "json_schema", "json_schema": {"name": "mafia_vote", "schema": ACTION_SCHEMA}},
+                    temperature=0.7,
+                    cancel_event=get_cancel_event()
+                )
+            except LLMCancelledException:
+                restore_and_raise("Cancelled during mafia vote")
+
             mafia.last_llm_context["response"] = response
 
             # Parse response
@@ -187,6 +202,9 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
     # 2. Doctor protection
     doctor_players = game_state.get_players_by_role("Doctor")
     if doctor_players:
+        check_pause()
+        make_checkpoint("doctor_protect")
+
         doctor = doctor_players[0]
         prompt = build_night_prompt(game_state, doctor, "doctor_protect", alive_names)
 
@@ -198,12 +216,18 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
             "phase": game_state.phase,
             "day": game_state.day_number
         }
-        response = llm_client.call_model(
-            doctor.model,
-            messages,
-            response_format={"type": "json_schema", "json_schema": {"name": "doctor_action", "schema": ACTION_SCHEMA}},
-            temperature=0.7
-        )
+
+        try:
+            response = llm_client.call_model(
+                doctor.model,
+                messages,
+                response_format={"type": "json_schema", "json_schema": {"name": "doctor_action", "schema": ACTION_SCHEMA}},
+                temperature=0.7,
+                cancel_event=get_cancel_event()
+            )
+        except LLMCancelledException:
+            restore_and_raise("Cancelled during doctor protect")
+
         doctor.last_llm_context["response"] = response
 
         target = None
@@ -257,6 +281,9 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
     # 3. Sheriff investigation
     sheriff_players = game_state.get_players_by_role("Sheriff")
     if sheriff_players:
+        check_pause()
+        make_checkpoint("sheriff_investigate")
+
         sheriff = sheriff_players[0]
         prompt = build_night_prompt(game_state, sheriff, "sheriff_investigate", alive_names)
 
@@ -268,12 +295,18 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
             "phase": game_state.phase,
             "day": game_state.day_number
         }
-        response = llm_client.call_model(
-            sheriff.model,
-            messages,
-            response_format={"type": "json_schema", "json_schema": {"name": "sheriff_action", "schema": ACTION_SCHEMA}},
-            temperature=0.7
-        )
+
+        try:
+            response = llm_client.call_model(
+                sheriff.model,
+                messages,
+                response_format={"type": "json_schema", "json_schema": {"name": "sheriff_action", "schema": ACTION_SCHEMA}},
+                temperature=0.7,
+                cancel_event=get_cancel_event()
+            )
+        except LLMCancelledException:
+            restore_and_raise("Cancelled during sheriff investigate")
+
         sheriff.last_llm_context["response"] = response
 
         target = None
@@ -327,6 +360,9 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
     if vigilante_players:
         vigilante = vigilante_players[0]
         if not vigilante.role.bullet_used:
+            check_pause()
+            make_checkpoint("vigilante_kill")
+
             prompt = build_night_prompt(game_state, vigilante, "vigilante_kill", alive_names)
 
             messages = [{"role": "user", "content": prompt}]
@@ -337,12 +373,18 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
                 "phase": game_state.phase,
                 "day": game_state.day_number
             }
-            response = llm_client.call_model(
-                vigilante.model,
-                messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "vigilante_action", "schema": ACTION_SCHEMA}},
-                temperature=0.7
-            )
+
+            try:
+                response = llm_client.call_model(
+                    vigilante.model,
+                    messages,
+                    response_format={"type": "json_schema", "json_schema": {"name": "vigilante_action", "schema": ACTION_SCHEMA}},
+                    temperature=0.7,
+                    cancel_event=get_cancel_event()
+                )
+            except LLMCancelledException:
+                restore_and_raise("Cancelled during vigilante kill")
+
             vigilante.last_llm_context["response"] = response
 
             target = None
@@ -415,7 +457,14 @@ def handle_night_phase(game_state: GameState, llm_client: OpenRouterClient, game
     return night_results
 
 
-def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_id: str = None, emit_callback=None, emit_status_callback=None) -> Dict:
+def handle_day_phase(
+    game_state: GameState,
+    llm_client: OpenRouterClient,
+    game_id: str = None,
+    emit_callback=None,
+    emit_status_callback=None,
+    control: Any = None
+) -> Dict:
     """
     Handle a complete day phase.
 
@@ -425,13 +474,46 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
         game_id: Optional game ID for emitting real-time updates
         emit_callback: Optional callback function(game_id, game_state) to emit updates
         emit_status_callback: Optional callback for discussion status updates
+        control: Optional GameControl instance for pause/cancel support
 
     Returns:
         Dict with day phase results
+
+    Raises:
+        GamePausedException: If the game is paused during execution
     """
-    game_state.phase = "day"
-    game_state.day_number += 1
-    game_state.add_event("phase_change", f"Day {game_state.day_number} begins.", "all")
+
+    def check_pause():
+        """Check if game is paused and raise exception if so."""
+        if control and control.pause_event.is_set():
+            raise GamePausedException("Game paused")
+
+    def get_cancel_event():
+        """Get the cancel event from control, or None."""
+        return control.cancel_event if control else None
+
+    def make_checkpoint(action_type: str, context: dict = None):
+        """Create a checkpoint before an action."""
+        if control:
+            control.checkpoint = game_state.create_checkpoint(action_type, context)
+
+    def restore_and_raise(message: str):
+        """Restore from checkpoint and raise GamePausedException."""
+        if control and control.checkpoint:
+            game_state.restore_from_checkpoint(control.checkpoint)
+        raise GamePausedException(message)
+
+    # Check if we're resuming from a paused state
+    resuming = game_state.discussion_state is not None
+
+    if not resuming:
+        # Fresh day phase start
+        game_state.phase = "day"
+        game_state.day_number += 1
+        game_state.add_event("phase_change", f"Day {game_state.day_number} begins.", "all")
+    else:
+        # Resuming from pause
+        game_state.add_event("system", "Discussion resumed.", "all")
     
     day_results = {
         "discussion": [],
@@ -450,14 +532,37 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
     if emit_callback and game_id:
         emit_callback(game_id, game_state)
 
-    # 1. Discussion phase - real-time with queue-based priority system
-    discussion_messages = []
+    # 1. Discussion phase - round-robin with interrupt system
     max_discussion_messages = 10  # Max total messages before cutoff
+    alive_names = [p.name for p in alive_players]
 
-    # Queue tracking for accused/questioned players
-    accused_queue = set()      # Players who were accused of being mafia
-    questioned_queue = set()   # Players who were asked a direct question
-    players_spoken_this_phase = set()  # Track who has spoken at all this phase
+    # Restore or initialize discussion state
+    if resuming and game_state.discussion_state:
+        # Restore from saved state
+        saved = game_state.discussion_state
+        discussion_messages = saved.get("discussion_messages", [])
+        current_speaker_index = saved.get("current_speaker_index", 0)
+        consecutive_no_interrupt_rounds = saved.get("consecutive_no_interrupt_rounds", 0)
+        # Restore round-robin order by name, filtering out dead players
+        saved_order_names = saved.get("round_robin_order_names", [])
+        round_robin_order = []
+        for name in saved_order_names:
+            player = next((p for p in alive_players if p.name == name), None)
+            if player:
+                round_robin_order.append(player)
+        # Add any new alive players not in the saved order
+        for p in alive_players:
+            if p not in round_robin_order:
+                round_robin_order.append(p)
+        # Clear the saved state since we're resuming
+        game_state.discussion_state = None
+    else:
+        # Fresh start
+        discussion_messages = []
+        current_speaker_index = 0
+        # Build round-robin order (randomize initial order for fairness)
+        round_robin_order = list(alive_players)
+        random.shuffle(round_robin_order)
 
     # Helper to emit discussion status for UI visibility
     def emit_status(action: str, waiting_player: str = None, extra: dict = None):
@@ -465,76 +570,65 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
             status = {
                 "action": action,
                 "waiting_player": waiting_player,
-                "accused_queue": list(accused_queue),
-                "questioned_queue": list(questioned_queue),
                 "message_count": len(discussion_messages),
                 "max_messages": max_discussion_messages,
+                "interrupting_players": [],  # Will be populated during interrupt polling
             }
             if extra:
                 status.update(extra)
             emit_status_callback(game_id, status)
 
-    # Helper function to get priority with queue boost
-    def get_boosted_priority(player_name: str, base_priority: int) -> int:
-        if player_name in accused_queue:
-            return max(base_priority, 9)  # Accused players get priority 9+
-        elif player_name in questioned_queue:
-            return max(base_priority, 8)  # Questioned players get priority 8+
-        return base_priority
+    # Helper function to poll for interrupts
+    def poll_for_interrupts(exclude_player: str = None) -> list:
+        """Poll all players to see who wants to interrupt. Returns list of player names.
 
-    # Helper function to parse accused/questioned from response
-    def extract_queue_updates(response_data: dict, speaker_name: str, alive_names: list):
-        accused = []
-        questioned = []
+        Raises:
+            LLMCancelledException: If cancelled during polling
+        """
+        interrupting_players = []
+        players_waiting = []
 
-        if "structured_output" in response_data:
-            accused = response_data["structured_output"].get("accused", [])
-            questioned = response_data["structured_output"].get("questioned", [])
-        else:
-            try:
-                content = response_data.get("content", "")
-                json_start = content.find("{")
-                json_end = content.rfind("}") + 1
-                if json_start >= 0:
-                    parsed = json.loads(content[json_start:json_end])
-                    accused = parsed.get("accused", [])
-                    questioned = parsed.get("questioned", [])
-            except:
-                pass
+        for player in alive_players:
+            if player.name == exclude_player:
+                continue
+            players_waiting.append(player.name)
 
-        # Validate names - only include alive players, not the speaker
-        valid_accused = [n for n in accused if n in alive_names and n != speaker_name]
-        valid_questioned = [n for n in questioned if n in alive_names and n != speaker_name]
+        # Emit status showing we're polling for interrupts
+        emit_status("interrupt_polling", extra={"players_being_polled": players_waiting})
 
-        return valid_accused, valid_questioned
+        for player in alive_players:
+            if player.name == exclude_player:
+                continue
 
-    # Helper function to check urgent escape hatch
-    def check_urgent_escape_hatch(players_to_check: list) -> list:
-        urgent_players = []
-        for player in players_to_check:
-            prompt = build_urgent_check_prompt(game_state, player)
+            prompt = build_interrupt_check_prompt(game_state, player)
             messages = [{"role": "user", "content": prompt}]
 
             try:
+                # Emit waiting status for this player
+                emit_status("waiting_interrupt", waiting_player=player.name,
+                           extra={"interrupting_players": interrupting_players})
+
                 player.last_llm_context = {
                     "messages": messages,
                     "timestamp": datetime.now().isoformat(),
-                    "action_type": "urgent_check",
+                    "action_type": "interrupt_check",
                     "phase": game_state.phase,
                     "day": game_state.day_number
                 }
                 response = llm_client.call_model(
                     player.model,
                     messages,
-                    response_format={"type": "json_schema", "json_schema": {"name": "urgent", "schema": URGENT_CHECK_SCHEMA}},
+                    response_format={"type": "json_schema", "json_schema": {"name": "interrupt", "schema": INTERRUPT_SCHEMA}},
                     temperature=0.3,
-                    max_tokens=100
+                    max_tokens=50,
+                    cancel_event=get_cancel_event()
                 )
                 player.last_llm_context["response"] = response
 
-                has_critical = False
+                wants_to_interrupt = False
+
                 if "structured_output" in response:
-                    has_critical = response["structured_output"].get("has_critical_info", False)
+                    wants_to_interrupt = response["structured_output"].get("wants_to_interrupt", False)
                 else:
                     try:
                         content = response.get("content", "")
@@ -542,282 +636,219 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
                         json_end = content.rfind("}") + 1
                         if json_start >= 0:
                             parsed = json.loads(content[json_start:json_end])
-                            has_critical = parsed.get("has_critical_info", False)
+                            wants_to_interrupt = parsed.get("wants_to_interrupt", False)
                     except:
+                        # If we can't parse, assume no interrupt
                         pass
 
-                if has_critical:
-                    urgent_players.append(player)
-            except:
+                if wants_to_interrupt:
+                    interrupting_players.append(player.name)
+                    # Emit updated status showing this player wants to interrupt
+                    emit_status("waiting_interrupt", waiting_player=player.name,
+                               extra={"interrupting_players": interrupting_players})
+            except LLMCancelledException:
+                raise  # Re-raise cancellation
+            except Exception as e:
+                # On error, assume no interrupt - don't hold up the game
                 continue
 
-        return urgent_players
+        return interrupting_players
 
-    alive_names = [p.name for p in alive_players]
+    # Helper function to get a message from a player (no structured output required)
+    def get_player_message(player: "Player", is_interrupt: bool = False) -> tuple:
+        """Get a discussion message from a player.
+
+        Returns:
+            tuple: (message, failure_reason) - message is the text, failure_reason is None on success
+
+        Raises:
+            LLMCancelledException: If cancelled during message generation
+        """
+        prompt = build_day_discussion_prompt(game_state, player, is_interrupt=is_interrupt)
+        messages = [{"role": "user", "content": prompt}]
+
+        try:
+            player.last_llm_context = {
+                "messages": messages,
+                "timestamp": datetime.now().isoformat(),
+                "action_type": "discussion_message_interrupt" if is_interrupt else "discussion_message",
+                "phase": game_state.phase,
+                "day": game_state.day_number
+            }
+            response = llm_client.call_model(
+                player.model,
+                messages,
+                temperature=0.8,
+                max_tokens=300,
+                cancel_event=get_cancel_event()
+            )
+            player.last_llm_context["response"] = response
+
+            # No structured output - just use the content directly
+            raw_content = response.get("content", "")
+            message = raw_content.strip()
+
+            # Track if we had to extract from JSON
+            extracted_from_json = False
+
+            # Clean up the message - remove any JSON wrapper if the model added one
+            if message.startswith("{") and "message" in message:
+                try:
+                    json_start = message.find("{")
+                    json_end = message.rfind("}") + 1
+                    if json_start >= 0:
+                        parsed = json.loads(message[json_start:json_end])
+                        if "message" in parsed:
+                            message = parsed.get("message", "")
+                            extracted_from_json = True
+                except:
+                    pass  # Keep the original message if parsing fails
+
+            # Store debug info
+            player.last_llm_context["debug"] = {
+                "raw_content_length": len(raw_content),
+                "processed_message_length": len(message),
+                "extracted_from_json": extracted_from_json,
+                "raw_content_preview": raw_content[:200] if raw_content else "(empty)"
+            }
+
+            if not message:
+                return ("", f"Empty response (raw length: {len(raw_content)}, preview: {raw_content[:100]})")
+
+            return (message[:500], None)  # Limit message length
+        except LLMCancelledException:
+            raise  # Re-raise cancellation
+        except Exception as e:
+            error_msg = f"Exception: {type(e).__name__}: {str(e)}"
+            player.last_llm_context["error"] = error_msg
+            return ("", error_msg)
 
     # Emit initial discussion status
     emit_status("discussion_start")
 
     # Main discussion loop
+    if not resuming:
+        consecutive_no_interrupt_rounds = 0
+    max_no_interrupt_rounds = 2  # End discussion if 2 full rounds with no interrupts
+
     while len(discussion_messages) < max_discussion_messages:
-        # Phase 1: Get priorities from all players who haven't spoken recently
-        emit_status("priority_polling")
-        player_priorities = []
+        # Check for pause at start of each round
+        check_pause()
 
-        for player in alive_players:
-            # Allow players to speak multiple times, but not consecutively
-            last_speaker = discussion_messages[-1]["player"] if discussion_messages else None
-            if player.name == last_speaker:
-                continue
+        # Get the current speaker from round-robin
+        current_speaker = round_robin_order[current_speaker_index % len(round_robin_order)]
 
-            prompt = build_day_discussion_priority_prompt(
-                game_state, player,
-                accused_queue=accused_queue,
-                questioned_queue=questioned_queue
-            )
-            messages = [{"role": "user", "content": prompt}]
+        # Check if current speaker is still alive
+        if not current_speaker.alive:
+            current_speaker_index += 1
+            continue
 
-            try:
-                # Emit waiting status for this player
-                emit_status("waiting_priority", waiting_player=player.name)
-
-                player.last_llm_context = {
-                    "messages": messages,
-                    "timestamp": datetime.now().isoformat(),
-                    "action_type": "discussion_priority",
-                    "phase": game_state.phase,
-                    "day": game_state.day_number
-                }
-                response = llm_client.call_model(
-                    player.model,
-                    messages,
-                    response_format={"type": "json_schema", "json_schema": {"name": "priority", "schema": PRIORITY_ONLY_SCHEMA}},
-                    temperature=0.7,
-                    max_tokens=50
-                )
-                player.last_llm_context["response"] = response
-
-                priority = 5
-                wants_to_speak = True
-
-                if "structured_output" in response:
-                    priority = response["structured_output"].get("priority", 5)
-                    wants_to_speak = response["structured_output"].get("wants_to_speak", True)
-                else:
-                    try:
-                        content = response["content"]
-                        json_start = content.find("{")
-                        json_end = content.rfind("}") + 1
-                        if json_start >= 0:
-                            parsed = json.loads(content[json_start:json_end])
-                            priority = parsed.get("priority", 5)
-                            wants_to_speak = parsed.get("wants_to_speak", True)
-                    except:
-                        pass
-
-                if wants_to_speak:
-                    # Apply queue boost
-                    boosted_priority = get_boosted_priority(player.name, priority)
-                    player_priorities.append({
-                        "player": player.name,
-                        "priority": boosted_priority,
-                        "base_priority": priority
-                    })
-            except Exception as e:
-                continue
-
-        # Phase 2: If no one wants to speak, check urgent escape hatch
-        if not player_priorities:
-            # Only check players who haven't spoken or are in a queue
-            players_to_check = [
-                p for p in alive_players
-                if p.name not in players_spoken_this_phase or p.name in accused_queue or p.name in questioned_queue
-            ]
-
-            if players_to_check:
-                emit_status("urgent_check", extra={"checking_players": [p.name for p in players_to_check]})
-                urgent_players = check_urgent_escape_hatch(players_to_check)
-
-                if urgent_players:
-                    # Let all urgent players speak
-                    for urgent_player in urgent_players:
-                        if len(discussion_messages) >= max_discussion_messages:
-                            break
-
-                        prompt = build_day_discussion_prompt(game_state, urgent_player)
-                        messages = [{"role": "user", "content": prompt}]
-
-                        try:
-                            urgent_player.last_llm_context = {
-                                "messages": messages,
-                                "timestamp": datetime.now().isoformat(),
-                                "action_type": "discussion_message_urgent",
-                                "phase": game_state.phase,
-                                "day": game_state.day_number
-                            }
-                            response = llm_client.call_model(
-                                urgent_player.model,
-                                messages,
-                                response_format={"type": "json_schema", "json_schema": {"name": "discussion", "schema": DISCUSSION_SCHEMA}},
-                                temperature=0.8,
-                                max_tokens=200
-                            )
-                            urgent_player.last_llm_context["response"] = response
-
-                            message = ""
-                            priority = 10
-
-                            if "structured_output" in response:
-                                message = response["structured_output"].get("message", "")
-                                priority = response["structured_output"].get("priority", 10)
-                            else:
-                                try:
-                                    content = response["content"]
-                                    json_start = content.find("{")
-                                    json_end = content.rfind("}") + 1
-                                    if json_start >= 0:
-                                        parsed = json.loads(content[json_start:json_end])
-                                        message = parsed.get("message", "")
-                                        priority = parsed.get("priority", 10)
-                                except:
-                                    message = response.get("content", "")[:200]
-
-                            # Always mark as spoken and remove from queues
-                            players_spoken_this_phase.add(urgent_player.name)
-                            accused_queue.discard(urgent_player.name)
-                            questioned_queue.discard(urgent_player.name)
-
-                            if message:
-                                game_state.add_event("discussion", message, "public", player=urgent_player.name, priority=priority)
-                                discussion_messages.append({
-                                    "player": urgent_player.name,
-                                    "priority": priority,
-                                    "message": message
-                                })
-                                day_results["discussion"].append({
-                                    "player": urgent_player.name,
-                                    "priority": priority,
-                                    "message": message
-                                })
-
-                                # Extract queue updates
-                                new_accused, new_questioned = extract_queue_updates(response, urgent_player.name, alive_names)
-                                for name in new_accused:
-                                    accused_queue.add(name)
-                                for name in new_questioned:
-                                    questioned_queue.add(name)
-
-                                if emit_callback and game_id:
-                                    emit_callback(game_id, game_state)
-                        except:
-                            # Even on exception, mark as attempted
-                            players_spoken_this_phase.add(urgent_player.name)
-                            accused_queue.discard(urgent_player.name)
-                            questioned_queue.discard(urgent_player.name)
-                            continue
-
-                    # After urgent speakers, continue the loop
-                    continue
-
-            # No one wants to speak and no urgent info - end discussion
-            break
-
-        # Phase 3: Highest priority player speaks
-        player_priorities.sort(key=lambda x: x["priority"], reverse=True)
-        next_speaker_name = player_priorities[0]["player"]
-        next_speaker = next((p for p in alive_players if p.name == next_speaker_name), None)
-
-        if not next_speaker:
-            break
-
-        # Phase 4: Get the full message from the highest priority player
-        emit_status("waiting_message", waiting_player=next_speaker.name, extra={"selected_priority": player_priorities[0]["priority"]})
-
-        prompt = build_day_discussion_prompt(game_state, next_speaker)
-        messages = [{"role": "user", "content": prompt}]
+        # Phase 1: Poll for interrupts (exclude current speaker)
+        # Checkpoint before interrupt polling
+        make_checkpoint("discussion_interrupt_poll", {
+            "speaker_index": current_speaker_index,
+            "messages_count": len(discussion_messages),
+            "discussion_messages": list(discussion_messages),
+            "consecutive_no_interrupt_rounds": consecutive_no_interrupt_rounds,
+            "round_robin_order_names": [p.name for p in round_robin_order],
+        })
 
         try:
-            next_speaker.last_llm_context = {
-                "messages": messages,
-                "timestamp": datetime.now().isoformat(),
-                "action_type": "discussion_message",
-                "phase": game_state.phase,
-                "day": game_state.day_number
-            }
-            response = llm_client.call_model(
-                next_speaker.model,
-                messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "discussion", "schema": DISCUSSION_SCHEMA}},
-                temperature=0.8,
-                max_tokens=200
-            )
-            next_speaker.last_llm_context["response"] = response
+            interrupting_players = poll_for_interrupts(exclude_player=current_speaker.name)
+        except LLMCancelledException:
+            restore_and_raise("Cancelled during interrupt polling")
 
-            priority = player_priorities[0]["priority"]
-            message = ""
+        # Phase 2: Determine who speaks
+        if interrupting_players:
+            # Random selection among those who want to interrupt
+            selected_speaker_name = random.choice(interrupting_players)
+            selected_speaker = next((p for p in alive_players if p.name == selected_speaker_name), None)
+            is_interrupt = True
+            consecutive_no_interrupt_rounds = 0
+        else:
+            # No interrupts - current speaker goes
+            selected_speaker = current_speaker
+            is_interrupt = False
+            consecutive_no_interrupt_rounds += 1
 
-            if "structured_output" in response:
-                message = response["structured_output"].get("message", "")
-                if "priority" in response["structured_output"]:
-                    priority = response["structured_output"].get("priority", priority)
-            else:
-                try:
-                    content = response["content"]
-                    json_start = content.find("{")
-                    json_end = content.rfind("}") + 1
-                    if json_start >= 0:
-                        parsed = json.loads(content[json_start:json_end])
-                        message = parsed.get("message", "")
-                        if "priority" in parsed:
-                            priority = parsed.get("priority", priority)
-                except:
-                    message = response.get("content", "")[:200]
+            # Check if we should end discussion (no one has anything urgent to say)
+            if consecutive_no_interrupt_rounds >= max_no_interrupt_rounds and len(discussion_messages) >= len(alive_players):
+                # Everyone has had at least one turn and no one is interrupting
+                break
 
-            # Always mark the player as having spoken and remove from queues
-            # This prevents infinite loops when message extraction fails
-            players_spoken_this_phase.add(next_speaker.name)
-            accused_queue.discard(next_speaker.name)
-            questioned_queue.discard(next_speaker.name)
-
-            if message:
-                # Add the message to discussion
-                game_state.add_event("discussion", message, "public", player=next_speaker.name, priority=priority)
-                discussion_messages.append({
-                    "player": next_speaker.name,
-                    "priority": priority,
-                    "message": message
-                })
-                day_results["discussion"].append({
-                    "player": next_speaker.name,
-                    "priority": priority,
-                    "message": message
-                })
-
-                # Extract queue updates from self-reported accusations/questions
-                new_accused, new_questioned = extract_queue_updates(response, next_speaker.name, alive_names)
-                for name in new_accused:
-                    accused_queue.add(name)
-                for name in new_questioned:
-                    questioned_queue.add(name)
-
-                # Emit real-time update after each message
-                if emit_callback and game_id:
-                    emit_callback(game_id, game_state)
-        except Exception as e:
-            # Even on exception, mark player as having attempted to speak
-            players_spoken_this_phase.add(next_speaker.name)
-            accused_queue.discard(next_speaker.name)
-            questioned_queue.discard(next_speaker.name)
+        if not selected_speaker:
+            current_speaker_index += 1
             continue
+
+        # Phase 3: Get the message from the selected speaker
+        emit_status("waiting_message", waiting_player=selected_speaker.name,
+                   extra={"is_interrupt": is_interrupt})
+
+        # Checkpoint before getting message
+        make_checkpoint("discussion_message", {
+            "speaker": selected_speaker.name,
+            "is_interrupt": is_interrupt,
+            "speaker_index": current_speaker_index,
+            "messages_count": len(discussion_messages),
+            "discussion_messages": list(discussion_messages),
+            "consecutive_no_interrupt_rounds": consecutive_no_interrupt_rounds,
+            "round_robin_order_names": [p.name for p in round_robin_order],
+        })
+
+        try:
+            message, failure_reason = get_player_message(selected_speaker, is_interrupt=is_interrupt)
+        except LLMCancelledException:
+            restore_and_raise("Cancelled during discussion message")
+
+        if message:
+            # Add the message to discussion
+            game_state.add_event("discussion", message, "public", player=selected_speaker.name)
+            discussion_messages.append({
+                "player": selected_speaker.name,
+                "message": message,
+                "is_interrupt": is_interrupt
+            })
+            day_results["discussion"].append({
+                "player": selected_speaker.name,
+                "message": message,
+                "is_interrupt": is_interrupt
+            })
+
+            # Emit real-time update after each message
+            if emit_callback and game_id:
+                emit_callback(game_id, game_state)
+        else:
+            # Player failed to produce a message - add visible event
+            turn_type = "interrupt" if is_interrupt else "turn"
+            failure_msg = f"[{selected_speaker.name}'s {turn_type} produced no message: {failure_reason}]"
+            game_state.add_event("system", failure_msg, "all", player=selected_speaker.name)
+
+            # Still emit update so the failure is visible
+            if emit_callback and game_id:
+                emit_callback(game_id, game_state)
+
+        # Advance round-robin only if we used the scheduled speaker (not an interrupt)
+        if not is_interrupt:
+            current_speaker_index += 1
 
     emit_status("discussion_end")
     game_state.add_event("system", "Discussion phase ends.", "all")
 
+    # Check for pause before voting
+    check_pause()
+
     # 3. Voting phase - real-time, one player at a time
+    game_state.add_event("system", "Voting phase begins.", "all")
+    if emit_callback and game_id:
+        emit_callback(game_id, game_state)
+
     votes = []
     alive_names = [p.name for p in alive_players]
-    
-    for player in alive_players:
+
+    for i, player in enumerate(alive_players):
+        check_pause()  # Check before each vote
+        make_checkpoint("day_vote", {"voter_index": i, "previous_votes": list(votes)})
+
         prompt = build_day_voting_prompt(game_state, player)
 
         messages = [{"role": "user", "content": prompt}]
@@ -834,13 +865,14 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
                 player.model,
                 messages,
                 response_format={"type": "json_schema", "json_schema": {"name": "vote", "schema": VOTE_SCHEMA}},
-                temperature=0.7
+                temperature=0.7,
+                cancel_event=get_cancel_event()
             )
             player.last_llm_context["response"] = response
 
             vote_target = "abstain"
             explanation = ""
-            
+
             if "structured_output" in response:
                 vote_target = response["structured_output"].get("vote", "abstain")
                 explanation = response["structured_output"].get("explanation", "")
@@ -855,11 +887,11 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
                         explanation = parsed.get("explanation", "")
                 except:
                     pass
-            
+
             # Validate vote
             if vote_target != "abstain" and vote_target not in alive_names:
                 vote_target = "abstain"
-            
+
             votes.append({
                 "player": player.name,
                 "vote": vote_target,
@@ -877,10 +909,12 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
                     vote_msg += f" {explanation}"
             game_state.add_event("vote", vote_msg, "all", player=player.name, priority=8,
                                 metadata={"target": vote_target})
-            
+
             # Emit real-time update after each vote
             if emit_callback and game_id:
                 emit_callback(game_id, game_state)
+        except LLMCancelledException:
+            restore_and_raise("Cancelled during voting")
         except Exception as e:
             # Default to abstain on error
             votes.append({
@@ -888,7 +922,7 @@ def handle_day_phase(game_state: GameState, llm_client: OpenRouterClient, game_i
                 "vote": "abstain",
                 "explanation": "Error processing vote"
             })
-            
+
             # Emit update even on error
             if emit_callback and game_id:
                 emit_callback(game_id, game_state)

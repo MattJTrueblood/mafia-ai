@@ -391,8 +391,13 @@ button {
 }
 
 #controls {
-    text-align: center;
-    margin-top: 30px;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#controls button {
+    flex: 1;
 }
 
 .btn-primary {
@@ -419,6 +424,24 @@ button {
 
 .btn-secondary:hover {
     background-color: #2980b9;
+}
+
+.btn-pause {
+    background-color: #f39c12;
+    color: white;
+    font-weight: 600;
+}
+
+.btn-pause:hover {
+    background-color: #d68910;
+}
+
+.btn-pause.paused {
+    background-color: #27ae60;
+}
+
+.btn-pause.paused:hover {
+    background-color: #229954;
 }
 
 /* Loading state */
@@ -643,5 +666,59 @@ button {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
+}
+
+/* Interrupt indicator on player cards */
+.player-card.interrupting {
+    border-left-color: #e74c3c !important;
+    background-color: #3a2020 !important;
+}
+
+.interrupt-indicator {
+    color: #e74c3c;
+    font-size: 1.1em;
+    margin-left: 8px;
+    animation: raise-hand 0.8s ease-in-out infinite;
+}
+
+@keyframes raise-hand {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+/* Pass indicator on player cards */
+.player-card.passing {
+    border-left-color: #95a5a6 !important;
+    background-color: #2a2a2a !important;
+}
+
+.pass-indicator {
+    color: #95a5a6;
+    font-size: 1.1em;
+    margin-left: 8px;
+}
+
+/* Passing players in status panel */
+.status-value.has-items {
+    color: #95a5a6;
+    font-weight: 500;
+}
+
+/* Override for interrupting players (higher priority styling) */
+#status-interrupting.has-items {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+/* Interrupt mode indicator in status panel */
+.status-value.is-interrupt {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.status-value.paused {
+    color: #f39c12;
+    font-weight: 700;
+    animation: pulse 1s ease-in-out infinite;
 }
 

@@ -1,16 +1,20 @@
 // Game page JavaScript
 
 let currentGameId = null;
-let isProcessing = false;
+let gameStarted = false;
+let isPaused = false;
 let displayedEventCount = 0; // Track how many events we've displayed
 let socket = null;
 let waitingPlayer = null; // Track which player we're waiting for
+let interruptingPlayers = []; // Track which players want to interrupt
+let passingPlayers = []; // Track which players want to pass their turn
 
 function initializeGame(gameId) {
     currentGameId = gameId;
-    
+
     // Set up event listeners
-    document.getElementById('next-btn').addEventListener('click', handleNext);
+    document.getElementById('start-btn').addEventListener('click', handleStart);
+    document.getElementById('pause-btn').addEventListener('click', handlePause);
     
     // Connect to WebSocket
     socket = io();
@@ -26,6 +30,12 @@ function initializeGame(gameId) {
     // Listen for discussion status updates
     socket.on('discussion_status', (status) => {
         updateDiscussionStatus(status);
+    });
+
+    // Listen for pause state updates
+    socket.on('pause_state', (data) => {
+        isPaused = data.paused;
+        updatePauseButton();
     });
     
     // Listen for connection confirmation
@@ -70,11 +80,15 @@ function updateDisplay(gameState) {
     if (gameState.game_over) {
         statusEl.textContent = `Game Over! ${gameState.winner === 'mafia' ? 'Mafia' : 'Town'} wins!`;
         statusEl.className = 'status game-over';
-        document.getElementById('next-btn').disabled = true;
-    } else {
-        statusEl.textContent = 'Game in progress';
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('start-btn').textContent = 'Game Over';
+        document.getElementById('pause-btn').disabled = true;
+    } else if (gameStarted) {
+        statusEl.textContent = isPaused ? 'Game paused' : 'Game running';
         statusEl.className = 'status';
-        document.getElementById('next-btn').disabled = false;
+    } else {
+        statusEl.textContent = 'Ready to start';
+        statusEl.className = 'status';
     }
     
     // Update players
@@ -106,13 +120,35 @@ function updatePlayers(players) {
             className += ' waiting';
         }
 
+        // Add interrupting class if this player wants to interrupt
+        const isInterrupting = interruptingPlayers.includes(player.name);
+        if (isInterrupting) {
+            className += ' interrupting';
+        }
+
+        // Add passing class if this player wants to pass
+        const isPassing = passingPlayers.includes(player.name);
+        if (isPassing) {
+            className += ' passing';
+        }
+
         const roleDisplay = player.role || 'Unknown';
         const hasContext = player.has_context;
+
+        // Build indicator HTML
+        let indicatorHtml = '';
+        if (isWaiting) {
+            indicatorHtml = '<span class="waiting-indicator">...</span>';
+        } else if (isInterrupting) {
+            indicatorHtml = '<span class="interrupt-indicator" title="Wants to interrupt">✋</span>';
+        } else if (isPassing) {
+            indicatorHtml = '<span class="pass-indicator" title="Passing this turn">⏭</span>';
+        }
 
         card.className = className;
         card.innerHTML = `
             <span class="player-name">${escapeHtml(player.name)}</span>
-            ${isWaiting ? '<span class="waiting-indicator">...</span>' : ''}
+            ${indicatorHtml}
             <span class="player-role">${escapeHtml(roleDisplay)}</span>
             <span class="player-model">${escapeHtml(player.model)}</span>
             <button class="btn-context"
@@ -131,10 +167,12 @@ function updateDiscussionStatus(status) {
     const panel = document.getElementById('discussion-status');
 
     if (status.action === 'discussion_end') {
-        // Hide panel and clear waiting state
+        // Hide panel and clear waiting/interrupt/pass state
         panel.classList.add('hidden');
         waitingPlayer = null;
-        // Re-render players to remove waiting indicator
+        interruptingPlayers = [];
+        passingPlayers = [];
+        // Re-render players to remove indicators
         loadGameState();
         return;
     }
@@ -146,12 +184,19 @@ function updateDiscussionStatus(status) {
     const actionEl = document.getElementById('status-action');
     const actionLabels = {
         'discussion_start': 'Starting discussion',
-        'priority_polling': 'Polling priorities',
-        'waiting_priority': 'Getting priority',
+        'interrupt_polling': 'Checking for interrupts',
+        'waiting_interrupt': 'Polling interrupt',
         'waiting_message': 'Getting message',
-        'urgent_check': 'Checking for urgent info'
+        'discussion_paused': 'PAUSED'
     };
     actionEl.textContent = actionLabels[status.action] || status.action;
+
+    // Add special styling for paused state
+    if (status.action === 'discussion_paused') {
+        actionEl.classList.add('paused');
+    } else {
+        actionEl.classList.remove('paused');
+    }
 
     // Update waiting player
     const waitingEl = document.getElementById('status-waiting');
@@ -169,51 +214,117 @@ function updateDiscussionStatus(status) {
     document.getElementById('status-messages').textContent =
         `${status.message_count} / ${status.max_messages}`;
 
-    // Update queues
-    const accusedEl = document.getElementById('status-accused');
-    if (status.accused_queue && status.accused_queue.length > 0) {
-        accusedEl.textContent = status.accused_queue.join(', ');
-        accusedEl.classList.add('has-items');
+    // Update interrupting players
+    const interruptingEl = document.getElementById('status-interrupting');
+    if (status.interrupting_players && status.interrupting_players.length > 0) {
+        interruptingPlayers = status.interrupting_players;
+        interruptingEl.textContent = status.interrupting_players.join(', ');
+        interruptingEl.classList.add('has-items');
     } else {
-        accusedEl.textContent = '-';
-        accusedEl.classList.remove('has-items');
+        interruptingPlayers = [];
+        interruptingEl.textContent = '-';
+        interruptingEl.classList.remove('has-items');
     }
 
-    const questionedEl = document.getElementById('status-questioned');
-    if (status.questioned_queue && status.questioned_queue.length > 0) {
-        questionedEl.textContent = status.questioned_queue.join(', ');
-        questionedEl.classList.add('has-items');
-    } else {
-        questionedEl.textContent = '-';
-        questionedEl.classList.remove('has-items');
+    // Update passing players
+    const passingEl = document.getElementById('status-passing');
+    if (passingEl) {
+        if (status.passing_players && status.passing_players.length > 0) {
+            passingPlayers = status.passing_players;
+            passingEl.textContent = status.passing_players.join(', ');
+            passingEl.classList.add('has-items');
+        } else {
+            passingPlayers = [];
+            passingEl.textContent = '-';
+            passingEl.classList.remove('has-items');
+        }
+    } else if (status.passing_players) {
+        // Element doesn't exist yet, just update the state
+        passingPlayers = status.passing_players;
     }
 
-    // Re-render players to show waiting indicator
-    // We need to fetch current players or cache them
-    if (status.waiting_player) {
-        updateWaitingIndicator(status.waiting_player);
+    // Update is_interrupt indicator
+    const interruptModeEl = document.getElementById('status-interrupt-mode');
+    if (interruptModeEl) {
+        if (status.is_interrupt) {
+            interruptModeEl.textContent = 'Yes (interrupt)';
+            interruptModeEl.classList.add('is-interrupt');
+        } else {
+            interruptModeEl.textContent = 'No (scheduled turn)';
+            interruptModeEl.classList.remove('is-interrupt');
+        }
     }
+
+    // Re-render players to show waiting/interrupt indicators
+    updatePlayerIndicators();
 }
 
-function updateWaitingIndicator(playerName) {
-    // Update player cards to show/hide waiting indicator
+function updatePlayerIndicators() {
+    // Update player cards to show/hide waiting, interrupt, and pass indicators
     const cards = document.querySelectorAll('.player-card');
     cards.forEach(card => {
         const nameEl = card.querySelector('.player-name');
-        const existingIndicator = card.querySelector('.waiting-indicator');
+        if (!nameEl) return;
 
-        if (nameEl && nameEl.textContent === playerName) {
+        const playerName = nameEl.textContent;
+        const existingWaitingIndicator = card.querySelector('.waiting-indicator');
+        const existingInterruptIndicator = card.querySelector('.interrupt-indicator');
+        const existingPassIndicator = card.querySelector('.pass-indicator');
+
+        // Handle waiting indicator (highest priority)
+        if (playerName === waitingPlayer) {
             card.classList.add('waiting');
-            if (!existingIndicator) {
+            if (!existingWaitingIndicator) {
                 const indicator = document.createElement('span');
                 indicator.className = 'waiting-indicator';
                 indicator.textContent = '...';
                 nameEl.after(indicator);
             }
+            // Remove other indicators if showing waiting
+            if (existingInterruptIndicator) existingInterruptIndicator.remove();
+            if (existingPassIndicator) existingPassIndicator.remove();
+            card.classList.remove('interrupting', 'passing');
         } else {
             card.classList.remove('waiting');
-            if (existingIndicator) {
-                existingIndicator.remove();
+            if (existingWaitingIndicator) {
+                existingWaitingIndicator.remove();
+            }
+
+            // Handle interrupt indicator (second priority)
+            if (interruptingPlayers.includes(playerName)) {
+                card.classList.add('interrupting');
+                if (!existingInterruptIndicator) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'interrupt-indicator';
+                    indicator.textContent = '✋';
+                    indicator.title = 'Wants to interrupt';
+                    nameEl.after(indicator);
+                }
+                // Remove pass indicator if showing interrupt
+                if (existingPassIndicator) existingPassIndicator.remove();
+                card.classList.remove('passing');
+            } else {
+                card.classList.remove('interrupting');
+                if (existingInterruptIndicator) {
+                    existingInterruptIndicator.remove();
+                }
+
+                // Handle pass indicator (third priority)
+                if (passingPlayers.includes(playerName)) {
+                    card.classList.add('passing');
+                    if (!existingPassIndicator) {
+                        const indicator = document.createElement('span');
+                        indicator.className = 'pass-indicator';
+                        indicator.textContent = '⏭';
+                        indicator.title = 'Passing this turn';
+                        nameEl.after(indicator);
+                    }
+                } else {
+                    card.classList.remove('passing');
+                    if (existingPassIndicator) {
+                        existingPassIndicator.remove();
+                    }
+                }
             }
         }
     });
@@ -300,9 +411,6 @@ function createEventElement(event, playerMap) {
         if (event.player) {
             content += `<span class="${nameClass}">${escapeHtml(event.player)} (${escapeHtml(roleDisplay)}):</span>`;
         }
-        if (event.priority) {
-            content += `<span class="priority-badge ${getPriorityClass(event.priority)}" title="Priority: ${event.priority}/10">P${event.priority}</span>`;
-        }
         content += `<span class="event-message">${escapeHtml(event.message)}</span>`;
 
         if (event.visibility !== 'all' && event.visibility !== 'public') {
@@ -327,13 +435,6 @@ function getPlayerNameClass(playerInfo) {
     return className;
 }
 
-function getPriorityClass(priority) {
-    if (priority >= 9) return 'priority-urgent';
-    if (priority >= 7) return 'priority-high';
-    if (priority <= 3) return 'priority-low';
-    return 'priority-normal';
-}
-
 function getVisibilityLabel(visibility) {
     const labels = {
         'mafia': 'MAFIA ONLY',
@@ -347,39 +448,88 @@ function getVisibilityLabel(visibility) {
     return 'PRIVATE';
 }
 
-async function handleNext() {
-    if (isProcessing || !currentGameId) return;
-    
-    isProcessing = true;
-    const nextBtn = document.getElementById('next-btn');
-    nextBtn.disabled = true;
-    nextBtn.textContent = 'Processing...';
-    
+async function handleStart() {
+    if (gameStarted || !currentGameId) return;
+
+    const startBtn = document.getElementById('start-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting...';
+
     try {
-        const response = await fetch(`/game/${currentGameId}/next`, {
+        const response = await fetch(`/game/${currentGameId}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok) {
-            updateDisplay(data.game_state);
-            
-            if (data.message === 'Game over') {
-                alert(`Game Over! ${data.winner === 'mafia' ? 'Mafia' : 'Town'} wins!`);
-            }
+            gameStarted = true;
+            startBtn.textContent = 'Running';
+            pauseBtn.disabled = false;
         } else {
-            alert('Error: ' + (data.error || 'Failed to process next action'));
-            loadGameState(); // Refresh to get current state
+            console.error('Failed to start game:', data.error);
+            startBtn.disabled = false;
+            startBtn.textContent = 'Start Game';
         }
     } catch (error) {
-        alert('Error: ' + error.message);
-        loadGameState(); // Refresh to get current state
+        console.error('Error starting game:', error);
+        startBtn.disabled = false;
+        startBtn.textContent = 'Start Game';
+    }
+}
+
+async function handlePause() {
+    if (!currentGameId || !gameStarted) return;
+
+    const pauseBtn = document.getElementById('pause-btn');
+    pauseBtn.disabled = true;
+
+    try {
+        const response = await fetch(`/game/${currentGameId}/pause`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            isPaused = data.paused;
+            updatePauseButton();
+            updateStartButton();
+        } else {
+            console.error('Failed to toggle pause:', data.error);
+        }
+    } catch (error) {
+        console.error('Error toggling pause:', error);
     } finally {
-        isProcessing = false;
-        nextBtn.disabled = false;
-        nextBtn.textContent = 'Next Action';
+        pauseBtn.disabled = false;
+    }
+}
+
+function updatePauseButton() {
+    const pauseBtn = document.getElementById('pause-btn');
+
+    if (isPaused) {
+        pauseBtn.textContent = 'Resume';
+        pauseBtn.classList.add('paused');
+    } else {
+        pauseBtn.textContent = 'Pause';
+        pauseBtn.classList.remove('paused');
+    }
+}
+
+function updateStartButton() {
+    const startBtn = document.getElementById('start-btn');
+
+    if (gameStarted) {
+        if (isPaused) {
+            startBtn.textContent = 'Paused';
+        } else {
+            startBtn.textContent = 'Running';
+        }
     }
 }
 
@@ -432,6 +582,19 @@ async function showPlayerContext(playerName) {
             responseText += '\n\n--- Parsed Structured Output ---\n';
             responseText += JSON.stringify(response_data.structured_output, null, 2);
         }
+
+        // Add debug info if available
+        if (data.context.debug) {
+            responseText += '\n\n--- Debug Info ---\n';
+            responseText += JSON.stringify(data.context.debug, null, 2);
+        }
+
+        // Add error info if available
+        if (data.context.error) {
+            responseText += '\n\n--- ERROR ---\n';
+            responseText += data.context.error;
+        }
+
         document.getElementById('modal-response').textContent = responseText || 'No response available';
 
         // Show modal
@@ -463,6 +626,10 @@ function copyContext() {
     const structured = ctx.response?.structured_output
         ? JSON.stringify(ctx.response.structured_output, null, 2)
         : 'None';
+    const debug = ctx.debug
+        ? JSON.stringify(ctx.debug, null, 2)
+        : 'None';
+    const error = ctx.error || 'None';
     const estimatedTokens = Math.ceil(prompt.length / 4);
 
     const textToCopy = `=== LLM Context for ${currentContextData.player_name} ===
@@ -480,6 +647,12 @@ ${response}
 
 === STRUCTURED OUTPUT ===
 ${structured}
+
+=== DEBUG INFO ===
+${debug}
+
+=== ERROR ===
+${error}
 `;
 
     navigator.clipboard.writeText(textToCopy).then(() => {

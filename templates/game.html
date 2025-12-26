@@ -16,7 +16,12 @@
                     <p><strong>Phase:</strong> <span id="phase">{{ game_state.phase }}</span> | <strong>Day:</strong> <span id="day">{{ game_state.day_number }}</span></p>
                     <p id="game-status" class="status"></p>
                 </div>
-                
+
+                <div id="controls">
+                    <button id="start-btn" class="btn-primary">Start Game</button>
+                    <button id="pause-btn" class="btn-pause" disabled>Pause</button>
+                </div>
+
                 <div id="players-section">
                     <h2>Players</h2>
                     <div id="players-list"></div>
@@ -37,20 +42,20 @@
                         <span id="status-messages" class="status-value">0 / 10</span>
                     </div>
                     <div class="status-row">
-                        <span class="status-label">Accused:</span>
-                        <span id="status-accused" class="status-value queue-list">-</span>
+                        <span class="status-label">Interrupting:</span>
+                        <span id="status-interrupting" class="status-value queue-list">-</span>
                     </div>
                     <div class="status-row">
-                        <span class="status-label">Questioned:</span>
-                        <span id="status-questioned" class="status-value queue-list">-</span>
+                        <span class="status-label">Passing:</span>
+                        <span id="status-passing" class="status-value">-</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">Is interrupt:</span>
+                        <span id="status-interrupt-mode" class="status-value">-</span>
                     </div>
                 </div>
-
-                <div id="controls">
-                    <button id="next-btn" class="btn-primary">Next Action</button>
-                </div>
             </div>
-            
+
             <div class="right-column">
                 <div id="event-log-section">
                     <h2>Game Events</h2>
