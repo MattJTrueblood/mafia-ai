@@ -780,23 +780,21 @@ Example (abstain): {{"vote": "abstain", "explanation": "No one has shown clear s
     return prompt
 
 
-def build_mafia_vote_prompt(game_state, player: "Player", previous_votes: List[Dict]) -> str:
-    """Build prompt for mafia night voting."""
+def build_mafia_discussion_prompt(game_state, player: "Player", previous_messages: List[Dict]) -> str:
+    """Build prompt for mafia night discussion (before voting)."""
     context = build_game_context(game_state, viewing_player=player)
     rules = build_game_rules()
     mafia_guidance = build_mafia_strategic_guidance()
-    
+
     mafia_players = game_state.get_players_by_role("Mafia")
     mafia_names = [p.name for p in mafia_players]
-    
-    votes_info = ""
-    if previous_votes:
-        votes_info = "\nPrevious mafia votes:\n"
-        for vote in previous_votes:
-            target = vote.get("target", "abstain")
-            reasoning = vote.get("reasoning", "")
-            votes_info += f"- {vote['player']} voted for {target}: {reasoning}\n"
-    
+
+    messages_info = ""
+    if previous_messages:
+        messages_info = "\nPrevious discussion messages:\n"
+        for msg in previous_messages:
+            messages_info += f"- {msg['player']}: {msg['message']}\n"
+
     alive_players = game_state.get_alive_players()
     alive_names = [p.name for p in alive_players]
 
@@ -805,27 +803,316 @@ def build_mafia_vote_prompt(game_state, player: "Player", previous_votes: List[D
     if game_state.day_number == 0:
         day0_rules = """
 NIGHT 1 GUIDELINES - Limited information available:
-- This is the very start of the game.  You have no information on any of the players besides your fellow mafia members.
-- Do make assumptions or guess prior context.  There is no prior context.
+- This is the very start of the game. You have no information on any of the players besides your fellow mafia members.
+- Do not make assumptions or guess prior context. There is no prior context.
 - It's ok to choose a first night target randomly.
 """
-    
+
     prompt = f"""{rules}You are {player.name}, a member of the Mafia. Your fellow mafia members are: {', '.join(mafia_names)}.
 
 {mafia_guidance}
 {context}
-{votes_info}
+{messages_info}
 {day0_rules}
 
-You are in the night phase. You and your fellow mafia members must vote on who to kill tonight.
+This is the mafia discussion phase. You're talking privately with your fellow mafia members about who to kill tonight.
+
+Alive players who could be targeted: {', '.join(alive_names)}
+
+Share your thoughts on:
+- Who you think should be the target
+- Your reasoning (threats, special roles, strategy)
+- Any coordination notes for tomorrow's day phase
+
+Keep your response brief (1-3 sentences). This is a private discussion, not a vote yet.
+
+Your message (plain text, no JSON):"""
+
+    return prompt
+
+
+def build_mafia_vote_prompt(game_state, player: "Player", previous_votes: List[Dict], discussion_messages: List[Dict] = None) -> str:
+    """Build prompt for mafia night voting (after discussion)."""
+    context = build_game_context(game_state, viewing_player=player)
+    rules = build_game_rules()
+
+    mafia_players = game_state.get_players_by_role("Mafia")
+    mafia_names = [p.name for p in mafia_players]
+
+    # Show discussion messages
+    discussion_info = ""
+    if discussion_messages:
+        discussion_info = "\nMafia discussion (just concluded):\n"
+        for msg in discussion_messages:
+            discussion_info += f"- {msg['player']}: {msg['message']}\n"
+
+    # Show previous votes
+    votes_info = ""
+    if previous_votes:
+        votes_info = "\nVotes so far:\n"
+        for vote in previous_votes:
+            target = vote.get("target", "abstain")
+            votes_info += f"- {vote['player']} voted for {target}\n"
+
+    alive_players = game_state.get_alive_players()
+    alive_names = [p.name for p in alive_players]
+
+    prompt = f"""{rules}You are {player.name}, a member of the Mafia. Your fellow mafia members are: {', '.join(mafia_names)}.
+
+{context}
+{discussion_info}
+{votes_info}
+
+It's time to vote on who to kill tonight. Based on the discussion, choose your target.
 
 Available targets: {', '.join(alive_names)}
 
-Respond with a JSON object containing:
+Respond with a JSON object containing ONLY:
 - "target": the name of the player to kill, or null to abstain
-- "reasoning": a brief explanation of your choice
 
-Example: {{"target": "Bob", "reasoning": "He's been too active and might be the Sheriff."}}"""
-    
+Example: {{"target": "Bob"}}"""
+
+    return prompt
+
+
+def build_role_discussion_prompt(game_state, player: "Player", role_type: str, available_targets: List[str]) -> str:
+    """Build prompt for role's thinking/discussion phase (before action)."""
+    context = build_game_context(game_state, viewing_player=player)
+    rules = build_game_rules()
+    town_guidance = build_town_strategic_guidance()
+
+    if role_type == "doctor":
+        role_guidance = build_doctor_strategic_guidance()
+        last_protected = None
+        if hasattr(player.role, 'last_protected'):
+            last_protected = player.role.last_protected
+        constraint = f" Remember: You cannot protect {last_protected} again (you protected them last night)." if last_protected else ""
+
+        prompt = f"""{rules}You are {player.name}, the Doctor. You are a TOWN FACTION member.
+
+{town_guidance}
+{role_guidance}
+{context}
+
+It's the night phase. Think through who you should protect tonight.{constraint}
+
+Alive players: {', '.join(available_targets)}
+
+Consider:
+- Who might the mafia target?
+- Who seems like a valuable town member?
+- Are there any revealed special roles that need protection?
+
+Share your thinking (1-3 sentences). This is your private reasoning before making your choice.
+
+Your thoughts (plain text, no JSON):"""
+
+    elif role_type == "sheriff":
+        role_guidance = build_sheriff_strategic_guidance()
+
+        # First night specific guidance
+        day0_rules = ""
+        if game_state.day_number == 0:
+            day0_rules = """
+NIGHT 1 - Limited information:
+- This is the start of the game. You have no information on any players.
+- It's ok to choose a first investigation target randomly.
+"""
+
+        prompt = f"""{rules}You are {player.name}, the Sheriff. You are a TOWN FACTION member.
+
+{town_guidance}
+{role_guidance}
+{context}
+{day0_rules}
+
+It's the night phase. Think through who you should investigate tonight.
+
+Alive players: {', '.join(available_targets)}
+
+Consider:
+- Who has been acting suspiciously?
+- Who do you want to confirm as town or mafia?
+- What information would be most valuable?
+
+Share your thinking (1-3 sentences). This is your private reasoning before making your choice.
+
+Your thoughts (plain text, no JSON):"""
+
+    elif role_type == "vigilante":
+        role_guidance = build_vigilante_strategic_guidance()
+        bullet_status = "You have already used your bullet." if (hasattr(player.role, 'bullet_used') and player.role.bullet_used) else "You still have your bullet available."
+
+        prompt = f"""{rules}You are {player.name}, the Vigilante. You are a TOWN FACTION member.
+
+{town_guidance}
+{role_guidance}
+{context}
+
+It's the night phase. Think through whether you should use your bullet tonight.
+{bullet_status}
+
+Alive players: {', '.join(available_targets)}
+
+Consider:
+- Do you have a confident mafia read?
+- Is it worth using your one bullet now?
+- Could this target be eliminated by town vote instead?
+
+Share your thinking (1-3 sentences). This is your private reasoning before making your choice.
+
+Your thoughts (plain text, no JSON):"""
+
+    else:
+        prompt = f"You are {player.name}. Think through your action."
+
+    return prompt
+
+
+def build_role_action_prompt(game_state, player: "Player", role_type: str, available_targets: List[str], previous_discussion: str = "") -> str:
+    """Build prompt for role's action decision (after discussion)."""
+
+    discussion_context = f"\nYour previous reasoning:\n{previous_discussion}\n" if previous_discussion else ""
+
+    if role_type == "doctor":
+        last_protected = None
+        if hasattr(player.role, 'last_protected'):
+            last_protected = player.role.last_protected
+        constraint = f"\nYou CANNOT protect {last_protected} (protected last night)." if last_protected else ""
+
+        prompt = f"""You are {player.name}, the Doctor.
+{discussion_context}
+Now choose who to protect tonight.{constraint}
+
+Available targets: {', '.join(available_targets)}
+You can also protect yourself.
+
+Respond with a JSON object containing ONLY:
+- "target": the name of the player to protect, or null to abstain
+
+Example: {{"target": "Alice"}}"""
+
+    elif role_type == "sheriff":
+        prompt = f"""You are {player.name}, the Sheriff.
+{discussion_context}
+Now choose who to investigate tonight.
+
+Available targets: {', '.join(available_targets)}
+
+Respond with a JSON object containing ONLY:
+- "target": the name of the player to investigate, or null to abstain
+
+Example: {{"target": "Bob"}}"""
+
+    elif role_type == "vigilante":
+        prompt = f"""You are {player.name}, the Vigilante.
+{discussion_context}
+Now decide whether to use your bullet tonight.
+
+Available targets: {', '.join(available_targets)}
+
+Respond with a JSON object containing ONLY:
+- "target": the name of the player to kill, or null to save your bullet
+
+Example: {{"target": "Charlie"}}
+Example: {{"target": null}}"""
+
+    else:
+        prompt = f"You are {player.name}. Choose your target."
+
+    return prompt
+
+
+def build_postgame_discussion_prompt(game_state, player: "Player") -> str:
+    """Build prompt for postgame discussion."""
+    # Build a special context showing all roles
+    all_roles = ""
+    for p in game_state.players:
+        role_text = "mafia" if p.team == "mafia" else p.role.name.lower()
+        status = "alive" if p.alive else "dead"
+        all_roles += f"- {p.name}: {role_text} ({status})\n"
+
+    winner = "Town" if game_state.winner == "town" else "Mafia"
+
+    prompt = f"""The game is over. {winner} wins!
+
+ROLE REVEAL:
+{all_roles}
+
+You are {player.name} ({player.role.name.lower() if player.role else 'unknown'}).
+
+This is the postgame discussion. Now that all roles are revealed, share your thoughts on the game.
+
+Consider discussing:
+- Key moments or turning points
+- Good plays (yours or others')
+- Mistakes or near-misses
+- Surprising reveals
+- What you were thinking at certain points
+
+Keep your message brief (2-4 sentences). Be conversational and reflective.
+
+Your postgame comment (plain text, no JSON):"""
+
+    return prompt
+
+
+def build_mvp_vote_prompt(game_state, player: "Player") -> str:
+    """Build prompt for MVP voting."""
+    # Build player list with roles
+    all_players = ""
+    for p in game_state.players:
+        role_text = "mafia" if p.team == "mafia" else p.role.name.lower()
+        all_players += f"- {p.name}: {role_text}\n"
+
+    winner = "Town" if game_state.winner == "town" else "Mafia"
+    other_players = [p.name for p in game_state.players if p.name != player.name]
+
+    prompt = f"""The game is over. {winner} wins!
+
+Players:
+{all_players}
+
+You are {player.name}. Vote for the MVP (Most Valuable Player) of this game.
+
+Consider:
+- Who made the best plays?
+- Who had the biggest impact on the outcome?
+- Who played their role exceptionally well?
+
+You CANNOT vote for yourself. Choose from: {', '.join(other_players)}
+
+Respond with a JSON object containing:
+- "target": the name of the player you're voting for as MVP
+- "reason": a brief explanation of why they deserve MVP (1-2 sentences)
+
+Example: {{"target": "Alice", "reason": "Her sheriff investigations turned the game around for town."}}"""
+
+    return prompt
+
+
+def build_sheriff_post_investigation_prompt(game_state, player: "Player", target: str, result: str) -> str:
+    """Build prompt for sheriff's reflection after seeing investigation result."""
+    # Build summary of all investigations
+    investigations_summary = ""
+    if hasattr(player.role, 'investigations') and player.role.investigations:
+        for inv_target, inv_result in player.role.investigations:
+            investigations_summary += f"- {inv_target}: {inv_result.upper()}\n"
+
+    result_upper = result.upper()
+
+    prompt = f"""You are {player.name}, the Sheriff. You just completed your investigation.
+
+Your investigation results so far:
+{investigations_summary}
+You have just learned that {target} is {result_upper}!
+
+React briefly to this result (1-3 sentences). Consider:
+- Does this confirm or contradict your suspicions?
+- How does this information fit with what you've observed?
+- What might you do with this information tomorrow? (reveal it, keep it secret, etc.)
+
+Your reaction (plain text, no JSON):"""
+
     return prompt
 

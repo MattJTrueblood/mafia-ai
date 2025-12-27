@@ -5,9 +5,10 @@ let gameStarted = false;
 let isPaused = false;
 let displayedEventCount = 0; // Track how many events we've displayed
 let socket = null;
-let waitingPlayer = null; // Track which player we're waiting for
+let waitingPlayer = null; // Track which player we're waiting for (legacy, used by discussion_status)
 let interruptingPlayers = []; // Track which players want to interrupt
 let passingPlayers = []; // Track which players want to pass their turn
+let pendingPlayers = new Set(); // Universal tracking: players with pending API calls
 
 function initializeGame(gameId) {
     currentGameId = gameId;
@@ -36,6 +37,11 @@ function initializeGame(gameId) {
     socket.on('pause_state', (data) => {
         isPaused = data.paused;
         updatePauseButton();
+    });
+
+    // Listen for universal player status updates (pending/complete API calls)
+    socket.on('player_status', (data) => {
+        updatePlayerPendingStatus(data.player, data.status);
     });
     
     // Listen for connection confirmation
@@ -114,8 +120,8 @@ function updatePlayers(players) {
             className += ' town';
         }
 
-        // Add waiting class if this player is being queried
-        const isWaiting = waitingPlayer === player.name;
+        // Add waiting class if this player has a pending API call
+        const isWaiting = pendingPlayers.has(player.name) || waitingPlayer === player.name;
         if (isWaiting) {
             className += ' waiting';
         }
@@ -271,8 +277,11 @@ function updatePlayerIndicators() {
         const existingInterruptIndicator = card.querySelector('.interrupt-indicator');
         const existingPassIndicator = card.querySelector('.pass-indicator');
 
-        // Handle waiting indicator (highest priority)
-        if (playerName === waitingPlayer) {
+        // Check if player has pending API call (universal status) OR is the legacy waitingPlayer
+        const isPending = pendingPlayers.has(playerName) || playerName === waitingPlayer;
+
+        // Handle waiting/pending indicator (highest priority)
+        if (isPending) {
             card.classList.add('waiting');
             if (!existingWaitingIndicator) {
                 const indicator = document.createElement('span');
@@ -328,6 +337,18 @@ function updatePlayerIndicators() {
             }
         }
     });
+}
+
+function updatePlayerPendingStatus(playerName, status) {
+    // Update the universal pending players set
+    if (status === 'pending') {
+        pendingPlayers.add(playerName);
+    } else if (status === 'complete') {
+        pendingPlayers.delete(playerName);
+    }
+
+    // Update the UI immediately
+    updatePlayerIndicators();
 }
 
 function updateEventLog(events, players) {

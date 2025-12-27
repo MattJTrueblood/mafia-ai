@@ -34,10 +34,14 @@ class GameState:
 
     # Step constants for night phase
     STEP_NIGHT_START = "night_start"
+    STEP_MAFIA_DISCUSSION = "mafia_discussion"  # Mafia discuss before voting
     STEP_MAFIA_VOTE = "mafia_vote"  # Followed by index: mafia_vote:0, mafia_vote:1, etc.
-    STEP_DOCTOR = "doctor"
-    STEP_SHERIFF = "sheriff"
-    STEP_VIGILANTE = "vigilante"
+    STEP_DOCTOR_DISCUSS = "doctor_discuss"  # Doctor thinks through options
+    STEP_DOCTOR_ACT = "doctor_act"  # Doctor chooses target
+    STEP_SHERIFF_DISCUSS = "sheriff_discuss"  # Sheriff thinks through options
+    STEP_SHERIFF_ACT = "sheriff_act"  # Sheriff chooses target
+    STEP_VIGILANTE_DISCUSS = "vigilante_discuss"  # Vigilante thinks through options
+    STEP_VIGILANTE_ACT = "vigilante_act"  # Vigilante chooses target
     STEP_NIGHT_RESOLVE = "night_resolve"
 
     # Step constants for day phase
@@ -46,6 +50,12 @@ class GameState:
     STEP_DISCUSSION_MESSAGE = "discussion_message"  # discussion_message:player_name
     STEP_VOTING = "voting"  # voting:0, voting:1, etc.
     STEP_VOTING_RESOLVE = "voting_resolve"
+
+    # Step constants for postgame phase
+    STEP_POSTGAME_REVEAL = "postgame_reveal"
+    STEP_POSTGAME_DISCUSSION = "postgame_discussion"
+    STEP_MVP_VOTING = "mvp_voting"
+    STEP_GAME_END = "game_end"
 
     def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int] = None):
         """
@@ -82,8 +92,25 @@ class GameState:
         else:
             self.distribute_roles_default()
 
-        # Add initial log entry
-        self.add_event("system", f"Game started with {len(self.players)} players. Roles have been distributed.", "all")
+        # Add initial log entry with role counts
+        role_counts = {}
+        for player in self.players:
+            role_name = player.role.name.lower()
+            role_counts[role_name] = role_counts.get(role_name, 0) + 1
+
+        # Build role distribution string in a sensible order
+        role_order = ["mafia", "town", "sheriff", "doctor", "vigilante"]
+        role_parts = []
+        for role in role_order:
+            if role in role_counts:
+                role_parts.append(f"{role_counts[role]} {role}")
+        # Add any other roles not in the standard order
+        for role, count in role_counts.items():
+            if role not in role_order:
+                role_parts.append(f"{count} {role}")
+
+        role_str = ", ".join(role_parts)
+        self.add_event("system", f"Game started with {len(self.players)} players. Roles have been distributed: {role_str}.", "all")
 
     def distribute_roles_default(self):
         """Distribute roles based on player count with sensible defaults."""
@@ -192,9 +219,13 @@ class GameState:
         self.current_step = self.STEP_NIGHT_START
         self.step_index = 0
         self.phase_data = {
+            "mafia_discussion_messages": [],
             "mafia_votes": [],
+            "doctor_discussion": None,
             "doctor_protection": None,
+            "sheriff_discussion": None,
             "sheriff_investigation": None,
+            "vigilante_discussion": None,
             "vigilante_kill": None,
             "protected_player": None,
         }

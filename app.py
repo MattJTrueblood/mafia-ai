@@ -50,6 +50,20 @@ def emit_discussion_status(game_id, status):
     socketio.emit('discussion_status', status, room=game_id)
 
 
+def emit_player_status(game_id, player_name, status):
+    """Emit player API status update for UI visibility.
+
+    This is the UNIVERSAL status for any player waiting on an API response.
+    The UI should show "..." next to the player's name when status is "pending".
+
+    Args:
+        game_id: The game ID
+        player_name: Name of the player
+        status: "pending" or "complete"
+    """
+    socketio.emit('player_status', {'player': player_name, 'status': status}, room=game_id)
+
+
 def game_loop(game_id: str):
     """
     Main game loop running as a greenlet.
@@ -82,6 +96,7 @@ def game_loop(game_id: str):
                     cancel_event=control.cancel_event,
                     emit_callback=emit_game_state_update,
                     emit_status_callback=emit_discussion_status,
+                    emit_player_status_callback=emit_player_status,
                     game_id=game_id,
                 )
 
