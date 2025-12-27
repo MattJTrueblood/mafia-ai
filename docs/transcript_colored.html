@@ -1,0 +1,436 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mafia Transcript (Colored)</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    margin: 24px; line-height: 1.35;
+    background: #0b0f19; color: #e5e7eb;
+  }
+  .wrap { max-width: 1050px; margin: 0 auto; }
+  .header { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
+  h1 { font-size: 20px; margin: 0 0 10px 0; color: #f3f4f6; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px; font-size: 12px; }
+  .pill {
+    border-radius: 999px; padding: 3px 9px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.04);
+  }
+  .log {
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.03);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+  }
+  .line { padding: 5px 0; border-bottom: 1px dashed rgba(255,255,255,0.07); }
+  .line:last-child { border-bottom: none; }
+  .meta { color: rgba(229,231,235,0.60); font-style: italic; }
+  .channel { color: rgba(229,231,235,0.75); font-weight: 600; }
+  .speaker { font-weight: 750; }
+  .badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; margin-left: 8px; vertical-align: 1px; }
+  .text { white-space: pre-wrap; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  ::selection { background: rgba(99,102,241,0.35); }
+  a { color: #93c5fd; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Mafia Transcript (Colored)</h1>
+    <div class="legend">
+
+<span class="pill"><span class="speaker" style="color:#ff5c5c">Reimu</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(MAFIA)</span></span>
+<span class="pill"><span class="speaker" style="color:#ffd166">Marisa</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(MAFIA)</span></span>
+<span class="pill"><span class="speaker" style="color:#c77dff">Rumia</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(TOWN)</span></span>
+<span class="pill"><span class="speaker" style="color:#2ee6d6">Daiyousei</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(VIGILANTE)</span></span>
+<span class="pill"><span class="speaker" style="color:#57a5ff">Cirno</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(TOWN)</span></span>
+<span class="pill"><span class="speaker" style="color:#ff9f43">Koakuma</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(TOWN)</span></span>
+<span class="pill"><span class="speaker" style="color:#4cff7a">Meiling</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(DOCTOR)</span></span>
+<span class="pill"><span class="speaker" style="color:#b07dff">Patchouli</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(TOWN)</span></span>
+<span class="pill"><span class="speaker" style="color:#c7cedb">Sakuya</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(SHERIFF)</span></span>
+<span class="pill"><span class="speaker" style="color:#ff4d6d">Remilia</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(TOWN)</span></span>
+<span class="pill"><span class="speaker" style="color:#ff7a00">Flandre</span> <span class="mono" style="color:rgba(229,231,235,0.55)">(MAFIA)</span></span>
+
+    </div>
+  </div>
+  <div class="log">
+
+<div class="line ">The following is a transcript of an ideal mafia game, to be used as an example for how play might go.  I&#x27;d like the AIs to use this as an example.  All night phases are visible here but generally those are private.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line ">THE PLAYERS:</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line"><span class="speaker" style="color:#c77dff">Rumia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">vigilante</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#ff9f43">Koakuma</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">doctor</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">sheriff</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line meta">&nbsp;</div>
+<div class="line ">Special Rules:  flip on lynch, lynches require majority of votes</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">-----GAME LOG-----</div>
+<div class="line meta">Game started with 11 players.  Roles have been distributed:  3 mafia, 5 town, 1 sheriff, 1 vigilante, 1 doctor.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 1 begins.</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">It&#x27;s night 1, so let&#x27;s just choose randomly.  How about Rumia?</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Sure, works for me.</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Sounds good.  I&#x27;m planning to play aggressive, follow my lead and bus me if you need to for credibility.</span></div>
+<div class="line meta">Mafia Discussion phase ends.</div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">[Mafia Vote] Reimu votes to kill Rumia</div>
+<div class="line ">[Mafia Vote] Marisa votes to kill Rumia</div>
+<div class="line ">[Mafia Vote] Flandre votes to kill Rumia</div>
+<div class="line ">Mafia has chosen to kill Rumia.</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Sheriff night phase begins.</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I&#x27;ll choose a random investigation target for now.  I choose Cirno.</span></div>
+<div class="line ">Sheriff Sakuya investigates Cirno.</div>
+<div class="line ">Cirno is TOWN!</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">Good, I have one confirmed townie.  I&#x27;ll keep that fact in my pocket for later.</span></div>
+<div class="line meta">Sheriff night phase ends.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I&#x27;ll choose to protect myself tonight.  Mafia will probably be voting randomly so I&#x27;ve got a 1 in 8 chance of being the unlucky target.</span></div>
+<div class="line ">Doctor Meiling protects Doctor Meiling.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Holding onto my bullet for now.  I&#x27;ll keep on the lookout for suspicious players.</span></div>
+<div class="line ">Vigilante shoots nobody tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 1 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 1 begins.</div>
+<div class="line meta">Rumia has been found dead, killed during the night!</div>
+<div class="line meta">Remaining players (10): Reimu, Marisa, Daiyousei, Cirno, Koakuma, Meiling, Patchouli, Sakuya, Remilia, Flandre</div>
+<div class="line meta">Day 1 discussion phase begins.  </div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">ok, mafia got the night 1 kill.  Anyone have info?  I don&#x27;t think we should roleclaim yet but let&#x27;s put what we got on the table.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">agree on no day 1 claims but let&#x27;s not be so passive.  I want everybody putting something on the table, softclaims or hunches are fine but let&#x27;s get some progress fast.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">discussion and speculation are fine but this seems unnecessarily hostile, Flandre.  Let&#x27;s try to actually solve not bully for reactions.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">This is exactly what I mean.  safe, non-commital, framed as reasonable.  Sounds like mafia trying to buy early credibility.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I don&#x27;t buy it, this is too early to be so aggressive.  Doesn&#x27;t read town to me.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Same.  Flandre is either bad mafia or bad town.  Either way I think she&#x27;s got to go.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Come on.  Classic town misplay, complain about passivity day 1 and then hammer the first person to actually put pressure on overly passive players.  Don&#x27;t fall for it, we can&#x27;t waste day 1.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I was on board with pressure but this is just forcing a narrative.  Disagreement doesn&#x27;t mean you&#x27;re mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#ff9f43">Koakuma</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Seems like everyone is going for Flandre.  I&#x27;m fine with the lynch but let&#x27;s not ignore the possibility of a bus — this all feels suspiciously clean to me.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I&#x27;m not a huge fan of early wagons but Flandre is too suspicious right now.  I know who I&#x27;m voting for.</span></div>
+<div class="line meta">Day 1 discussion phase ends.</div>
+<div class="line meta">Day 1 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Flandre.  She&#x27;s obviously being aggressive and forcing a narrative.  Classic mafia behavior.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Flandre.  Day 1 disagreement is normal, baseless mafia claims are not.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote to lynch Flandre.  She&#x27;s the most suspicious player in the game right now.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Flandre.  I&#x27;ll real surprised if she doesn&#x27;t flip mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#ff9f43">Koakuma</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Flandre.  Her aggression feels performative. Fingers crossed for a mafia flip.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I abstain.  I don&#x27;t think aggression alone is enough to vote on and I want to avoid a mislynch.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Flandre.  Like I said, either bad town or bad mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I vote to lynch Flandre.  Her behavior doesn&#x27;t seem like genuine probing.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Flandre. Early pressure is fine but she took it too far into stubbornness.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Marisa.  Her caution is way too suspicious.</span></div>
+<div class="line ">Flandre has died.  Lynched by vote (8 votes)</div>
+<div class="line ">Flandre was MAFIA.</div>
+<div class="line meta">Day 1 voting phase ends.</div>
+<div class="line meta">Day 1 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 2 begins.</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Ok, so Flandre sacrificed herself as predicted.  Hopefully not a totally wasteful death.</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I think you cleared yourself pretty well but I wish she didn&#x27;t vote for me at the end.  I don&#x27;t need that kind of attention.  Anyways who should we kill?</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Leaning hard on Koakuma.  She drew attention to our bussing strategy, we need to get rid of players with that kind of mindset FAST.</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Agreed.  Just be careful if someone else calls us out for offing a savvy player early.</span></div>
+<div class="line meta">Mafia Discussion phase ends.</div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">[Mafia Vote] Reimu votes to kill Koakuma.</div>
+<div class="line ">[Mafia Vote] Marisa votes to kill Koakuma.</div>
+<div class="line ">Mafia has chosen to kill Koakuma.</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Sheriff night phase begins.</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">That initial argument between Marisa and Flandre felt a little manufactured.  I have a hunch Koakuma might have been right about the possibility Flandre was intentionally bussed.  I need to know whether Marisa is clear or not.</span></div>
+<div class="line ">Sheriff Sakuya investigates Marisa.</div>
+<div class="line ">Marisa is MAFIA!</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I knew it!  Now I have one confirmed town (Cirno) and one confirmed Mafia (Marisa).  Now the real question is, do I want to roleclaim tomorrow?  Might be too early, but getting Marisa lynched tomorrow might be worth it.  Let&#x27;s wait and see how things go.</span></div>
+<div class="line meta">Sheriff night phase ends.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I can&#x27;t protect myself again tonight, and nobody has given a clear signal that they&#x27;re a power role yet.  I could go for one of the more active players from the discussion yesterday, in case mafia are going for a more aggressive night 2 kill, but I wonder if mafia will go for someone quieter to avoid giving town too many clues.  Daiyousei and Remilia were both pretty quiet yesterday; I&#x27;ll go with Remilia.</span></div>
+<div class="line ">Doctor Meiling protects Remilia.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Day 1 gave us an early Mafia flip but also a lot of noise from bussing, and I don&#x27;t have a confident mafia read yet. Firing now risks undoing good town progress, so I&#x27;m holding my shot again tonight.</span></div>
+<div class="line ">Vigilante shoots nobody tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 2 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 2 begins.</div>
+<div class="line meta">Koakuma has been found dead, killed during the night!</div>
+<div class="line meta">Remaining players (8): Reimu, Marisa, Daiyousei, Cirno, Meiling, Patchouli, Sakuya, Remilia</div>
+<div class="line meta">Day 2 discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Koakuma called the mafia bus yesterday and then got killed the next night...I was worried she&#x27;d be the night 2 kill target as soon as she said that.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">Wonder if they got our doctor already.  Who do you think stood to gain the most credibility yesterday?  Marisa looks sus to me.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">That&#x27;s a stretch; I disagreed with Flandre because she was weirdly aggressive just like you and everybody else.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Not EVERYBODY, remember?  Meiling, why did you abstain yesterday?</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Ok before this spirals, I want to be clear: my abstain yesterday wasn&#x27;t hedging or fear.  I didn&#x27;t like the wagon logic.  I still don&#x27;t like it.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Are we going to focus on a random day 1 vote with hindsight?  Remember, the mafia is probably one of the ones who voted FOR Flandre, not against.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I&#x27;m not convinced that abstain was totally random.  Could be more mafia misdirection.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">If that was a bus, it worked because one person looked calm, reasonable, and walked away with zero heat. That&#x27;s why I&#x27;m still looking at Marisa.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Flandre went after half the table!  You&#x27;re acting like disagreeing with her makes me special.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">This feels like Marisa versus Sakuya more than actual solving. If there&#x27;s real info here, it needs to surface, otherwise we&#x27;re just circling.</span></div>
+<div class="line meta">Day 2 discussion phase ends.</div>
+<div class="line meta">Day 2 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Meiling. Abstaining during a Mafia flip feels like misdirection to me.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Sakuya.  She&#x27;s attacking me for no reason especially when we have so little information on the table.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I abstain. I don&#x27;t see a clean lynch here yet.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Meiling.  We&#x27;ve got nothing else to go on and lots of people look sus right now, but she feels like the least bad choice.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I abstain.  Hopefully I survive this, if not, pay close attention to who was pushing the mislynch.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Marisa. Day 1 gave her a lot of credibility very cheaply and I think Sakuya is right about her.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I vote to lynch Marisa. Her position coming out of yesterday still doesn&#x27;t make sense to me and she&#x27;s obviously the most suspicious person here after Meiling.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Meiling. Sitting out a Mafia lynch still looks wrong in hindsight.</span></div>
+<div class="line ">Nobody died, as no player received a majority of votes.</div>
+<div class="line meta">Day 2 voting phase ends.</div>
+<div class="line meta">Day 2 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 3 begins</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Tough choice today.  Do we take out Meiling to sow confusion?  Or Sakuya who&#x27;s going after you?</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">It&#x27;s got to be Sakuya.  Normally I think it would implicate me too much, but I think there&#x27;s a high likelihood she&#x27;s Sheriff.  That would explain why she&#x27;d so confidently press me like that.</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">That does seem possible.  If you&#x27;re ok taking the heat tomorrow let&#x27;s take her out.  Nobody seems to suspect me yet.</span></div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">We can&#x27;t lose this chance if we have it.  Otherwise sheriff will just keep collecting more clears and guilties.  We can&#x27;t allow that.</span></div>
+<div class="line meta">Mafia Discussion phase ends.</div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">[Mafia Vote] Reimu votes to kill Sakuya.</div>
+<div class="line ">[Mafia Vote] Marisa votes to kill Sakuya.</div>
+<div class="line ">Mafia has chosen to kill Sakuya.</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Sheriff night phase begins.</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I pressed Meiling yesterday and I didn&#x27;t like how quickly the table pivoted to treating her as an obvious easy mislynch. If she&#x27;s town, that&#x27;s dangerous; if she&#x27;s mafia, I need to know now. I&#x27;ll investigate Meiling.</span></div>
+<div class="line ">Sheriff Sakuya investigates Meiling.</div>
+<div class="line ">Meiling is TOWN!</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">That confirms it. Cirno and Meiling are both clear, and Marisa is still Mafia. If I survive tonight, tomorrow is the right timing to roleclaim.</span></div>
+<div class="line meta">Sheriff night phase ends.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Sakuya&#x27;s pressure today felt informed, not speculative.  If she&#x27;s sheriff, and Mafia clocked that too, she&#x27;s the obvious target. I can&#x27;t self-protect again, but if I&#x27;m wrong here we probably lose anyway. I&#x27;m protecting Sakuya.</span></div>
+<div class="line ">Doctor Meiling protects Sakuya.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Still too much uncertainty. Sakuya, Meiling, and Marisa are all live possibilities.  I&#x27;ll wait one more night.</span></div>
+<div class="line ">Vigilante shoots nobody tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 3 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 3 begins.</div>
+<div class="line ">Nobody was killed last night.</div>
+<div class="line meta">Remaining players (8): Reimu, Marisa, Daiyousei, Cirno, Meiling, Patchouli, Sakuya, Remilia</div>
+<div class="line meta">Day 3 discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I&#x27;m the Sheriff. I investigated Cirno Night 1 (Town), Marisa Night 2 (Mafia), and Meiling Night 3 (Town). I probably got saved by the doctor last night.  We need to lynch Marisa NOW.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">This is way too convenient, and it&#x27;s coming from the same person who&#x27;s been on my case since yesterday.  Pretty clever mafia play going for the no-kill night to make it look like a doctor save, but we can&#x27;t let them get away with it.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I&#x27;m the Doctor.  I won&#x27;t claim specifics, but I&#x27;m pretty sure Sakuya is telling the truth.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">So we&#x27;re supposed to believe a Sheriff claim, implied Doctor protection, and a perfectly timed no-kill all line up? Fine. When I flip town, remember who benefited from this rush.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">If this is real, then Marisa&#x27;s done. I don&#x27;t love it, but the pieces fit too cleanly.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Thanks for the clear, sheriff.  We know there&#x27;s only 2 mafia left since we already got Flandre day 1.  Since both me and Meiling were cleared, Marisa has to be mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Pretty clutch timing too.  Any final thoughts, Marisa?</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Come on, a no-kill doesn&#x27;t magically confirm a doctor save.  If Sakuya is sheriff she has no way of knowing that she was actually saved.  That&#x27;s exactly the kind of mistake a mafia would make.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">We already have the two confirmed town clears to prove I&#x27;m a real sheriff.  Hammer Marisa NOW!</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Just remember this — nobody actually solved anything today. At best, you got lucky.  Someone is going to walk away from this looking very clean, and that&#x27;s when town games end.</span></div>
+<div class="line meta">Day 3 discussion phase ends.</div>
+<div class="line meta">Day 3 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Marisa.  Everything lines up.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Sakuya. Enjoy your freebie.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote to lynch Marisa. Confirmed guilty.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Marisa. Easy.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I vote to lynch Marisa. This is done.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Marisa. No point dragging it out.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I vote to lynch Marisa. Confirmed guilty by my investigation.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Marisa. Pretty obvious what is happening.</span></div>
+<div class="line ">Marisa has died.  Lynched by vote (7 votes)</div>
+<div class="line ">Marisa was MAFIA.</div>
+<div class="line meta">Day 3 voting phase ends.</div>
+<div class="line meta">Day 3 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 4 begins</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Sakuya has to die tonight. The Doctor can&#x27;t protect her again, and leaving a confirmed Sheriff alive is suicide. You did your best, Marisa — 5v1 will be rough but I&#x27;ll take it from here.</span></div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">Reimu votes to kill Sakuya.</div>
+<div class="line ">Mafia has chosen to kill Sakuya.</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Sheriff night phase begins.</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I&#x27;m almost certainly dead tonight, but there&#x27;s no reason to waste an investigation in case I&#x27;m wrong. Reimu has stayed just clean enough through all of this to worry me.</span></div>
+<div class="line ">Sheriff Sakuya investigates Reimu.</div>
+<div class="line ">Reimu is MAFIA!</div>
+<div class="line"><span class="channel">[Sheriff Discussion]</span> <span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">That settles it.  If I survive the night, we win.</span></div>
+<div class="line meta">Sheriff night phase ends.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Sakuya is dead if Mafia wants her tonight, and I can&#x27;t stop that. Cirno is the other confirmed town, and protecting her preserves the most information going into tomorrow. I&#x27;ll keep self-protect in reserve in case I need it tomorrow night.</span></div>
+<div class="line ">Doctor Meiling protects Cirno.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Marisa flipping Mafia explains a lot, but nothing points cleanly to the last mafia yet.  With the Sheriff likely dying tonight, firing blind risks hitting confirmed town. I&#x27;ll hold my shot again.</span></div>
+<div class="line ">Vigilante shoots nobody tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 4 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 4 begins.</div>
+<div class="line meta">Sakuya has been found dead, killed during the night!</div>
+<div class="line meta">Remaining players (6): Reimu, Daiyousei, Cirno, Meiling, Patchouli, Remilia</div>
+<div class="line meta">Day 4 discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Sheriff&#x27;s dead, but me and Meiling are cleared. One Mafia left among the four of you.  Also, we shouldn’t forget there could still be a vigilante out there.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Daiyousei: At this point we should be careful with concrete claims. Vote history matters more than vibes now. Anyone who voted suspiciously during days 1–3?</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Day 2, Reimu voted Sakuya along with Marisa.  Could be mafia coordination.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">What?  No, I voted Meiling on Day 2. Marisa was the only one who voted Sakuya.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Remilia, I just checked.  Reimu was on Meiling, not Sakuya.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I remember them both on Sakuya. That&#x27;s what made it suspicious.  Reimu and Marisa have always been coordinating together until Reimu bussed her last round.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">At this point, either Remilia is lying or she&#x27;s dangerously wrong and stubborn. Either way, that&#x27;s not something we can ignore this late in the game.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Mafia lie about past votes — it&#x27;s easy to gaslight details people don&#x27;t double-check.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Agreed. Rewriting vote history is a textbook mafia move.  If this is Mafia trying to force a mislynch while behind, they must be desperate.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">That&#x27;s not gaslighting, that&#x27;s how I remember it.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Doubling down on a provably false detail is how town mislynches happen — and how mafia push them.</span></div>
+<div class="line meta">Day 4 discussion phase ends.</div>
+<div class="line meta">Day 4 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Remilia. She lied about my day 2 vote history to try to mislynch me.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote to lynch Remilia. Rewriting vote history after correction is scummy.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Remilia. The facts don&#x27;t match her story.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I vote to lynch Remilia. Doubling down on a provably false detail is a bad sign.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Remilia. The log contradicts her claim.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Reimu.  When I flip town you&#x27;d better get lynch her!</span></div>
+<div class="line ">Remilia has died. Lynched by vote (5 votes).</div>
+<div class="line ">Remilia was TOWN.</div>
+<div class="line meta">Day 4 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 5 begins.</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">The mislynch bought me breathing room. Cirno and Meiling are both confirmed town, so Meiling is probably protecting either Cirno or herself tonight. I can&#x27;t know which one she covered last night, so the safer play is to remove Cirno and avoid a likely self-protect.  If she&#x27;s protected tonight, I can at least get her tomorrow.  Also, I can&#x27;t rule out a vigilante still being alive, so I have to stay mostly defensive to avoid a sudden loss.</span></div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">Reimu votes to kill Cirno</div>
+<div class="line ">Mafia has chosen to kill Cirno</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I chose to protect Cirno last night, so I’ll self-protect tonight.  We&#x27;re the two confirmed town so we&#x27;re the only good choices I can make here.</span></div>
+<div class="line ">Doctor Meiling protects Doctor Meiling.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Remilia flipped town.  She really was wrong about Reimu&#x27;s vote history but that doesn&#x27;t necessarily clear Reimu.  It&#x27;s got to be her or Patchouli;  Meiling and Cirno are both confirmed town.  Should I go for the shot then?  Shooting now is high risk — if I&#x27;m wrong, I hand Mafia the game. If I wait, I can push tomorrow with more leverage and still fire later if needed as long as I avoid being lynched.  It&#x27;s a tough choice, but I&#x27;m holding the shot.</span></div>
+<div class="line ">Vigilante shoots nobody tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 5 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 5 begins.</div>
+<div class="line meta">Cirno has been found dead, killed during the night!</div>
+<div class="line meta">Remaining players (4): Reimu, Daiyousei, Meiling, Patchouli</div>
+<div class="line meta">Day 5 discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">We&#x27;re down to four. Cirno was a clean kill. Meiling is confirmed doctor.  That leaves Reimu or Patchouli, and I&#x27;m leaning Reimu based on how hard she pushed the Remilia mislynch.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">We all pushed the Remilia mislynch.  Remilia was provably wrong about my vote and doubled down. Ending that day quickly was correct play.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I agreed with the lynch, but I don&#x27;t like how quickly you turned &quot;she&#x27;s wrong&quot; into &quot;we have to kill her now.&quot; That kind of confidence can also come from Mafia knowing the board and jumping on a mistake for an easy mislynch.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Because it was unavoidable. Letting someone rewrite vote history at LYLO numbers is how town throws games.  This feels like Daiyousei forcing a mislynch to win the game for the mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Daiyousei, what exactly makes you suspect Reimu?  I think you&#x27;re both kinda suspicious right now.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Come on!  She was the first to push for the lynch yesterday.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I only said we couldn&#x27;t ignore it.  YOU were the first one to level an actual mafia accusation.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">This is a tough vote.  Remilia mentioned that Reimu seemed to play like they were coordinating with Marisa until Sakuya&#x27;s Sheriff claim came out.  I can&#x27;t help but think that there&#x27;s some merit there.  It&#x27;s a tough call but Reimu I think you&#x27;re the most likely mafia.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Don&#x27;t let Daiyousei throw the game, not when we&#x27;re this close!</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">Daiyousei was the first to make a hard accusation yesterday and she came out swinging with a hard mafia accusation today.  Feels like how a desperate final remaining mafia player would play.</span></div>
+<div class="line meta">Day 5 discussion phase ends.</div>
+<div class="line meta">Day 5 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Daiyousei. This is a reckless forced push that ends the game if it’s wrong.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote to lynch Reimu. Her urgency around the Remilia lynch still doesn’t sit right with me and I&#x27;m only more convinced now.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I vote to lynch Daiyousei. The aggression and timing feel like a desperation play.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Reimu. Too many small things point in her direction.</span></div>
+<div class="line ">Nobody died, as no player received a majority of votes.</div>
+<div class="line meta">Day 5 voting phase ends.</div>
+<div class="line meta">Day 5 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Night 6 begins.</div>
+<div class="line ">Mafia night actions begin.</div>
+<div class="line meta">Mafia Discussion phase begins.</div>
+<div class="line"><span class="channel">[Mafia Discussion]</span> <span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">This is the real endgame. Three targets, three very different boards tomorrow.  If I kill Daiyousei, it’s too obvious — I look like I’m removing the loudest opposition.  If I kill Patchouli, Daiyousei might still convince Meiling to lynch me.  Meiling’s protect is the real variable. At this point her only real options are Cirno or herself. I killed Cirno last night, so I’m guessing she was self-protecting. If I’m right, she can’t cover herself tonight.  That puts me into Day 6 against two players who already voted to lynch me — but Daiyousei is a hardliner, but Patchouli is still persuadable. The Meiling kill won’t obviously point back at me; she voted with me on Day 5.  Whatever happens, I need to be ready for a brawl tomorrow.</span></div>
+<div class="line meta">Mafia vote phase begins.</div>
+<div class="line ">Reimu votes to kill Meiling</div>
+<div class="line ">Mafia has chosen to kill Meiling</div>
+<div class="line ">Mafia night actions end.</div>
+<div class="line meta">Doctor night phase begins.</div>
+<div class="line"><span class="channel">[Doctor Discussion]</span> <span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">This is the nightmare scenario. No lynch, four players left, and no more room for error.  I’m confirmed, which means if Mafia kills tonight, it’s either aimed at me or meant to set up tomorrow. I can’t protect myself twice in a row, so I have to choose one of the other three.  Who is the danger?  Patchouli is cautious, not aggressive. She doesn’t feel like someone who would force the game tonight.  If she&#x27;s mafia, she&#x27;s a damn clever one.  Reimu is under suspicion, but she’s been defensive, not pushy. If she’s Mafia, she probably expects to be targeted.  Daiyousei worries me the most. She’s been escalating every day since Remilia, pushing harder, narrowing the game. If she&#x27;s mafia, Reimu is definitely the target.  It&#x27;s a risky choice but I think I&#x27;ve got to go for Reimu.  I hope I&#x27;m right.</span></div>
+<div class="line ">I’m protecting Reimu.</div>
+<div class="line ">Doctor Meiling protects Reimu.</div>
+<div class="line meta">Doctor night phase ends.</div>
+<div class="line meta">Vigilante night phase begins.</div>
+<div class="line"><span class="channel">[Vigilante Discussion]</span> <span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">This is it.  If I wait again, Mafia controls tomorrow completely.  Reimu has benefited from every turn in the entire game keeps surviving every close call.  Patchouli sees it too.  If I&#x27;m wrong, it&#x27;s probably game over — but if I&#x27;m right, I win us the game right now.  I&#x27;m taking the shot. </span></div>
+<div class="line ">Vigilante shoots Reimu tonight.</div>
+<div class="line meta">Vigilante night phase ends.</div>
+<div class="line meta">Night 6 ends.</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">Day 6 begins.</div>
+<div class="line meta">Meiling has been found dead, killed during the night!</div>
+<div class="line meta">Remaining players (3): Reimu, Daiyousei, Patchouli</div>
+<div class="line meta">Day 6 discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Well, crap.  I’m the Vigilante.  I shot Reimu last night. The shot didn’t go through. Meiling protected her, and Mafia killed Meiling. If that doesn’t tell you who the last Mafia is, nothing will.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">You’re fakeclaiming vigilante to pretend this isn&#x27;t exactly what it looks like:  you killed Meiling, a confirmed power role, to eliminate a confirmed townie who was inclined to vote against you.  There’s no proof of any of your claims, and Meiling is the obvious target aside from me.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Slow down.  This is crazy.  Daiyousei, you&#x27;re telling me Meiling protected her own murderer last night?  Is that even possible?  </span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Doctor protects stop vigilante shots. It’s rare, but it happens.  Anyways Patchouli you already agreed with me that Reimu was sus.  Don&#x27;t back out now.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Daiyousei, your story has a hole in it.  If you were really vigilante, why not hold the bullet for today, roleclaim, and try to get us to abstain on the lynch?  Then if your intuition is correct you would shoot the remaining mafia with no possibility of doctor interference.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Because I didn’t think Meiling would protect a possible Mafia. Because you could’ve killed me instead. Because last-minute ‘just trust me’ claims don’t work. And because you’d argue it was too risky — and Patchouli would listen.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">If Daiyousei is lying, then Meiling just dies for nothing. If she’s telling the truth, then Meiling died protecting the wrong person. Either way, the night revolves around Reimu surviving.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Or it revolves around Daiyousei panicking when her push failed and inventing a story that can’t be verified now that Meiling is dead.  Late game fakeclaims are a risky play, but Daiyousei is relying on the idea that a far-fetched lie is more believable than a more mundane one.  Patchouli, we&#x27;re so close.  Don&#x27;t throw the game!</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">Meiling voted against me yesterday because she thought I was dangerous. That’s exactly why Mafia exploited it. This didn’t come out of nowhere.  Please, Patchouli, believe me.  Look at who benefits.  If I was mafia, taking out someone voting against me is the most obvious desperation play imaginable. That’s not how the mafia in this game has played — they’ve been surgical every single night.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">...Yeah. This is tough.  No matter how I slice it, Meiling dying only helps one person.  Mafia has been playing a good game up until now;  whether it&#x27;s Daiyousei or Reimu, they&#x27;re not the type to play sloppy at the last minute.  I also don&#x27;t know if the mafia which stayed under the radar so long is the same mafia that&#x27;s capable of some kind of crazy last minute vigilane fakeclaim.  Both of your stories are possible, and both fit the facts;  the only question is how many steps ahead I&#x27;m guessing the mafia are thinking.  If I guess wrong, we lose.  Damn.</span></div>
+<div class="line meta">Day 6 discussion phase ends.</div>
+<div class="line meta">Day 6 voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote to lynch Daiyousei. This entire story only exists to cover killing Meiling and force a 50/50 at the end.  Hope we win the coinflip</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote to lynch Reimu. I still can&#x27;t believe what happened with Meiling saving Reimu from my bullet.  It&#x27;s all up to Patchouli now.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote to lynch Reimu. Meiling’s death only makes sense if she was protecting the wrong person.  Fingers crossed!</span></div>
+<div class="line ">Reimu has died. Lynched by vote (2 votes).</div>
+<div class="line ">Reimu was MAFIA.</div>
+<div class="line ">TOWN WINS!</div>
+<div class="line meta">&nbsp;</div>
+<div class="line meta">ROLE REVEAL:</div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line"><span class="speaker" style="color:#c77dff">Rumia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">vigilante</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#ff9f43">Koakuma</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">doctor</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">sheriff</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">town</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">mafia</span></div>
+<div class="line meta">Postgame discussion phase begins.</div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Wow. That was brutal. I don’t think I’ve ever spent that long staring at a final vote.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I genuinely thought I’d thrown the game when Meiling died. Shooting into a  doctor protect felt awful.  I&#x27;ve never seen that happen before.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I protected Reimu because I thought Daiyousei was the last mafia. I was wrong — but I don’t regret the logic.  Daiyousei, you shouldn&#x27;t have been so aggressive on day 5.  If you just laid low and didn&#x27;t make any obvious attacks I probably would have protected you night 5 instead!</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Honestly, fooling the doctor to save me from a vigilante&#x27;s bullet was totally worth it.  Even though we lost I&#x27;m gonna remember that for a while.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">From my perspective, the game was basically decided the moment I roleclaimed on day 3. Dying before I could reveal it was painful, but town actually played it out correctly anyway.  You guys almost fumbled at the end though.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I still think the Flandre bus was the right call. It bought us a ton of credibility — we just got unlucky with the Sheriff.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I&#x27;m not sure about that.  It was a risky play and at best you got 1 safe kill out of it.  With the 11-player spread losing a mafia day 1 is just rough in general.</span></div>
+<div class="line"><span class="speaker" style="color:#c77dff">Rumia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">Well, I got killed night 1, but it&#x27;s good that the mafia hit a regular townie like me and not a power role.  Town really relied heavily on the sheriff and doctor this time.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I liked that nobody just auto-believed claims. Even at the end, Patchouli actually thought it through instead of coin-flipping.</span></div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I was seconds away from voting the other way. The deciding factor was simple: Meiling dying only makes sense if she protected wrong, not if Daiyousei panicked.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">And that’s Mafia for you. Even when you play “correctly,” you can still lose — but the reasoning matters more than the outcome.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">Agreed. That was a clean, high-skill endgame. No obvious throws, no dumb slips. Just pressure and timing.</span></div>
+<div class="line meta">Postgame discussion phase ends.</div>
+<div class="line meta">MVP voting phase begins.</div>
+<div class="line"><span class="speaker" style="color:#b07dff">Patchouli</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote Sakuya. Getting two clears and two mafia hits before dying basically solved the game.</span></div>
+<div class="line"><span class="speaker" style="color:#2ee6d6">Daiyousei</span><span class="badge" style="background:#00d0ff;color:#1a0a00">VIGILANTE</span>: <span class="text">I vote Sakuya. The Marisa investigation broke the mafia core wide open.</span></div>
+<div class="line"><span class="speaker" style="color:#4cff7a">Meiling</span><span class="badge" style="background:#f2ff00;color:#041b0b">DOCTOR</span>: <span class="text">I’m voting Meiling. I don&#x27;t want to toot my own horn but aside from the near-fumble at the end I had some pretty solid reads and clutches.  Doctor is a hard role to play so even just one protect is pretty impressive, let alone a sheriff on the turn before he roleclaims with 2 town clears and a guilty.</span></div>
+<div class="line"><span class="speaker" style="color:#57a5ff">Cirno</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote Sakuya. Sheriff play was clean and disciplined.</span></div>
+<div class="line"><span class="speaker" style="color:#ff4d6d">Remilia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote Reimu. They managed to play quite a good mafia game with some really clever kills.  And sorry to Meiling but mafia seemed consistently a step ahead of you.</span></div>
+<div class="line"><span class="speaker" style="color:#ffd166">Marisa</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote Sakuya. Losing her was the turning point.  I had no way of stopping you at that point.  Mafia don’t bus like that unless they&#x27;re properly screwed.</span></div>
+<div class="line"><span class="speaker" style="color:#ff7a00">Flandre</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote Reimu.  I watched the whole mafia side after I died and let me tell you, they were this close to pulling through at the end. Reimu kept the perfect balance of passive and aggressive.</span></div>
+<div class="line"><span class="speaker" style="color:#ff5c5c">Reimu</span><span class="badge" style="background:#500F0F;color:#e5e7eb">MAFIA</span>: <span class="text">I vote Daiyousei. That Night 6 shot was the only move that could actually break the stalemate and force a real endgame.  If I didn&#x27;t get lucky with the Meiling save it would have been a much different game.  And you managed to win Patchouli over at the end too.</span></div>
+<div class="line"><span class="speaker" style="color:#c7cedb">Sakuya</span><span class="badge" style="background:#2563eb;color:#071427">SHERIFF</span>: <span class="text">I vote Patchouli.  In the end she was the single tiebreaking vote.  She figured out the last mafia and was the decisive factor leading to the town victory.</span></div>
+<div class="line"><span class="speaker" style="color:#c77dff">Rumia</span><span class="badge" style="background:#41c54a;color:#000000">TOWN</span>: <span class="text">I vote Sakuya. Even dying Night 1, it was obvious later that her investigations were quietly steering the entire game.  Her confirmed clears on Cirno and Meiling had a huge effect on the voting from day 4 onwards.</span></div>
+
+  </div>
+</div>
+</body>
+</html>

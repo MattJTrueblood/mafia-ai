@@ -1,0 +1,367 @@
+The following is a transcript of an ideal mafia game, to be used as an example for how play might go.  I'd like the AIs to use this as an example.  All night phases are visible here but generally those are private.
+
+THE PLAYERS:
+Reimu:  mafia
+Marisa: mafia
+Rumia: town
+Daiyousei: vigilante
+Cirno: town
+Koakuma: town
+Meiling: doctor
+Patchouli: town
+Sakuya: sheriff
+Remilia: town
+Flandre: mafia
+
+Special Rules:  flip on lynch, lynches require majority of votes
+
+-----GAME LOG-----
+Game started with 11 players.  Roles have been distributed:  3 mafia, 5 town, 1 sheriff, 1 vigilante, 1 doctor.
+
+Night 1 begins.
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu: It's night 1, so let's just choose randomly.  How about Rumia?
+[Mafia Discussion] Marisa: Sure, works for me.
+[Mafia Discussion] Flandre: Sounds good.  I'm planning to play aggressive, follow my lead and bus me if you need to for credibility.
+Mafia Discussion phase ends.
+Mafia vote phase begins.
+[Mafia Vote] Reimu votes to kill Rumia
+[Mafia Vote] Marisa votes to kill Rumia
+[Mafia Vote] Flandre votes to kill Rumia
+Mafia has chosen to kill Rumia.
+Mafia night actions end.
+Sheriff night phase begins.
+[Sheriff Discussion] Sakuya: I'll choose a random investigation target for now.  I choose Cirno.
+Sheriff Sakuya investigates Cirno.
+Cirno is TOWN!
+[Sheriff Discussion] Sakuya: Good, I have one confirmed townie.  I'll keep that fact in my pocket for later.
+Sheriff night phase ends.
+Doctor night phase begins.
+[Doctor Discussion] Meiling: I'll choose to protect myself tonight.  Mafia will probably be voting randomly so I've got a 1 in 8 chance of being the unlucky target.
+Doctor Meiling protects Doctor Meiling.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei: Holding onto my bullet for now.  I'll keep on the lookout for suspicious players.
+Vigilante shoots nobody tonight.
+Vigilante night phase ends.
+Night 1 ends.
+
+Day 1 begins.
+Rumia has been found dead, killed during the night!
+Remaining players (10): Reimu, Marisa, Daiyousei, Cirno, Koakuma, Meiling, Patchouli, Sakuya, Remilia, Flandre
+Day 1 discussion phase begins.  
+Reimu:  ok, mafia got the night 1 kill.  Anyone have info?  I don't think we should roleclaim yet but let's put what we got on the table.
+Flandre:  agree on no day 1 claims but let's not be so passive.  I want everybody putting something on the table, softclaims or hunches are fine but let's get some progress fast.
+Marisa:  discussion and speculation are fine but this seems unnecessarily hostile, Flandre.  Let's try to actually solve not bully for reactions.
+Flandre:  This is exactly what I mean.  safe, non-commital, framed as reasonable.  Sounds like mafia trying to buy early credibility.
+Cirno:  I don't buy it, this is too early to be so aggressive.  Doesn't read town to me.
+Patchouli:  Same.  Flandre is either bad mafia or bad town.  Either way I think she's got to go.
+Flandre:  Come on.  Classic town misplay, complain about passivity day 1 and then hammer the first person to actually put pressure on overly passive players.  Don't fall for it, we can't waste day 1.
+Reimu:  I was on board with pressure but this is just forcing a narrative.  Disagreement doesn't mean you're mafia.
+Koakuma:  Seems like everyone is going for Flandre.  I'm fine with the lynch but let's not ignore the possibility of a bus — this all feels suspiciously clean to me.
+Sakuya:  I'm not a huge fan of early wagons but Flandre is too suspicious right now.  I know who I'm voting for.
+Day 1 discussion phase ends.
+Day 1 voting phase begins.
+Reimu:  I vote to lynch Flandre.  She's obviously being aggressive and forcing a narrative.  Classic mafia behavior.
+Marisa: I vote to lynch Flandre.  Day 1 disagreement is normal, baseless mafia claims are not.
+Daiyousei:  I vote to lynch Flandre.  She's the most suspicious player in the game right now.
+Cirno:  I vote to lynch Flandre.  I'll real surprised if she doesn't flip mafia.
+Koakuma:  I vote to lynch Flandre.  Her aggression feels performative. Fingers crossed for a mafia flip.
+Meiling:  I abstain.  I don't think aggression alone is enough to vote on and I want to avoid a mislynch.
+Patchouli:  I vote to lynch Flandre.  Like I said, either bad town or bad mafia.
+Sakuya:  I vote to lynch Flandre.  Her behavior doesn't seem like genuine probing.
+Remilia:  I vote to lynch Flandre. Early pressure is fine but she took it too far into stubbornness.
+Flandre:  I vote to lynch Marisa.  Her caution is way too suspicious.
+Flandre has died.  Lynched by vote (8 votes)
+Flandre was MAFIA.
+Day 1 voting phase ends.
+Day 1 ends.
+
+Night 2 begins.
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu:  Ok, so Flandre sacrificed herself as predicted.  Hopefully not a totally wasteful death.
+[Mafia Discussion] Marisa:  I think you cleared yourself pretty well but I wish she didn't vote for me at the end.  I don't need that kind of attention.  Anyways who should we kill?
+[Mafia Discussion] Reimu:  Leaning hard on Koakuma.  She drew attention to our bussing strategy, we need to get rid of players with that kind of mindset FAST.
+[Mafia Discussion] Marisa:  Agreed.  Just be careful if someone else calls us out for offing a savvy player early.
+Mafia Discussion phase ends.
+Mafia vote phase begins.
+[Mafia Vote] Reimu votes to kill Koakuma.
+[Mafia Vote] Marisa votes to kill Koakuma.
+Mafia has chosen to kill Koakuma.
+Mafia night actions end.
+Sheriff night phase begins.
+[Sheriff Discussion] Sakuya:  That initial argument between Marisa and Flandre felt a little manufactured.  I have a hunch Koakuma might have been right about the possibility Flandre was intentionally bussed.  I need to know whether Marisa is clear or not.
+Sheriff Sakuya investigates Marisa.
+Marisa is MAFIA!
+[Sheriff Discussion] Sakuya: I knew it!  Now I have one confirmed town (Cirno) and one confirmed Mafia (Marisa).  Now the real question is, do I want to roleclaim tomorrow?  Might be too early, but getting Marisa lynched tomorrow might be worth it.  Let's wait and see how things go.
+Sheriff night phase ends.
+Doctor night phase begins.
+[Doctor Discussion] Meiling:  I can't protect myself again tonight, and nobody has given a clear signal that they're a power role yet.  I could go for one of the more active players from the discussion yesterday, in case mafia are going for a more aggressive night 2 kill, but I wonder if mafia will go for someone quieter to avoid giving town too many clues.  Daiyousei and Remilia were both pretty quiet yesterday; I'll go with Remilia.
+Doctor Meiling protects Remilia.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei: Day 1 gave us an early Mafia flip but also a lot of noise from bussing, and I don't have a confident mafia read yet. Firing now risks undoing good town progress, so I'm holding my shot again tonight.
+Vigilante shoots nobody tonight.
+Vigilante night phase ends.
+Night 2 ends.
+
+Day 2 begins.
+Koakuma has been found dead, killed during the night!
+Remaining players (8): Reimu, Marisa, Daiyousei, Cirno, Meiling, Patchouli, Sakuya, Remilia
+Day 2 discussion phase begins.
+Cirno:  Koakuma called the mafia bus yesterday and then got killed the next night...I was worried she'd be the night 2 kill target as soon as she said that.
+Sakuya:  Wonder if they got our doctor already.  Who do you think stood to gain the most credibility yesterday?  Marisa looks sus to me.
+Marisa:  That's a stretch; I disagreed with Flandre because she was weirdly aggressive just like you and everybody else.
+Reimu:  Not EVERYBODY, remember?  Meiling, why did you abstain yesterday?
+Meiling:  Ok before this spirals, I want to be clear: my abstain yesterday wasn't hedging or fear.  I didn't like the wagon logic.  I still don't like it.
+Patchouli:  Are we going to focus on a random day 1 vote with hindsight?  Remember, the mafia is probably one of the ones who voted FOR Flandre, not against.
+Remilia:  I'm not convinced that abstain was totally random.  Could be more mafia misdirection.
+Sakuya: If that was a bus, it worked because one person looked calm, reasonable, and walked away with zero heat. That's why I'm still looking at Marisa.
+Marisa:  Flandre went after half the table!  You're acting like disagreeing with her makes me special.
+Daiyousei:  This feels like Marisa versus Sakuya more than actual solving. If there's real info here, it needs to surface, otherwise we're just circling.
+Day 2 discussion phase ends.
+Day 2 voting phase begins.
+Reimu: I vote to lynch Meiling. Abstaining during a Mafia flip feels like misdirection to me.
+Marisa: I vote to lynch Sakuya.  She's attacking me for no reason especially when we have so little information on the table.
+Daiyousei: I abstain. I don't see a clean lynch here yet.
+Cirno: I vote to lynch Meiling.  We've got nothing else to go on and lots of people look sus right now, but she feels like the least bad choice.
+Meiling: I abstain.  Hopefully I survive this, if not, pay close attention to who was pushing the mislynch.
+Patchouli: I vote to lynch Marisa. Day 1 gave her a lot of credibility very cheaply and I think Sakuya is right about her.
+Sakuya: I vote to lynch Marisa. Her position coming out of yesterday still doesn't make sense to me and she's obviously the most suspicious person here after Meiling.
+Remilia: I vote to lynch Meiling. Sitting out a Mafia lynch still looks wrong in hindsight.
+Nobody died, as no player received a majority of votes.
+Day 2 voting phase ends.
+Day 2 ends.
+
+Night 3 begins
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu:  Tough choice today.  Do we take out Meiling to sow confusion?  Or Sakuya who's going after you?
+[Mafia Discussion] Marisa:  It's got to be Sakuya.  Normally I think it would implicate me too much, but I think there's a high likelihood she's Sheriff.  That would explain why she'd so confidently press me like that.
+[Mafia Discussion] Reimu:  That does seem possible.  If you're ok taking the heat tomorrow let's take her out.  Nobody seems to suspect me yet.
+[Mafia Discussion] Marisa:  We can't lose this chance if we have it.  Otherwise sheriff will just keep collecting more clears and guilties.  We can't allow that.
+Mafia Discussion phase ends.
+Mafia vote phase begins.
+[Mafia Vote] Reimu votes to kill Sakuya.
+[Mafia Vote] Marisa votes to kill Sakuya.
+Mafia has chosen to kill Sakuya.
+Mafia night actions end.
+Sheriff night phase begins.
+[Sheriff Discussion] Sakuya:  I pressed Meiling yesterday and I didn't like how quickly the table pivoted to treating her as an obvious easy mislynch. If she's town, that's dangerous; if she's mafia, I need to know now. I'll investigate Meiling.
+Sheriff Sakuya investigates Meiling.
+Meiling is TOWN!
+[Sheriff Discussion] Sakuya:  That confirms it. Cirno and Meiling are both clear, and Marisa is still Mafia. If I survive tonight, tomorrow is the right timing to roleclaim.
+Sheriff night phase ends.
+Doctor night phase begins.
+[Doctor Discussion] Meiling: Sakuya's pressure today felt informed, not speculative.  If she's sheriff, and Mafia clocked that too, she's the obvious target. I can't self-protect again, but if I'm wrong here we probably lose anyway. I'm protecting Sakuya.
+Doctor Meiling protects Sakuya.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei:  Still too much uncertainty. Sakuya, Meiling, and Marisa are all live possibilities.  I'll wait one more night.
+Vigilante shoots nobody tonight.
+Vigilante night phase ends.
+Night 3 ends.
+
+Day 3 begins.
+Nobody was killed last night.
+Remaining players (8): Reimu, Marisa, Daiyousei, Cirno, Meiling, Patchouli, Sakuya, Remilia
+Day 3 discussion phase begins.
+Sakuya: I'm the Sheriff. I investigated Cirno Night 1 (Town), Marisa Night 2 (Mafia), and Meiling Night 3 (Town). I probably got saved by the doctor last night.  We need to lynch Marisa NOW.
+Marisa:  This is way too convenient, and it's coming from the same person who's been on my case since yesterday.  Pretty clever mafia play going for the no-kill night to make it look like a doctor save, but we can't let them get away with it.
+Meiling:  I'm the Doctor.  I won't claim specifics, but I'm pretty sure Sakuya is telling the truth.
+Marisa:  So we're supposed to believe a Sheriff claim, implied Doctor protection, and a perfectly timed no-kill all line up? Fine. When I flip town, remember who benefited from this rush.
+Patchouli:  If this is real, then Marisa's done. I don't love it, but the pieces fit too cleanly.
+Cirno:  Thanks for the clear, sheriff.  We know there's only 2 mafia left since we already got Flandre day 1.  Since both me and Meiling were cleared, Marisa has to be mafia.
+Reimu:  Pretty clutch timing too.  Any final thoughts, Marisa?
+Marisa:  Come on, a no-kill doesn't magically confirm a doctor save.  If Sakuya is sheriff she has no way of knowing that she was actually saved.  That's exactly the kind of mistake a mafia would make.
+Sakuya:  We already have the two confirmed town clears to prove I'm a real sheriff.  Hammer Marisa NOW!
+Marisa:  Just remember this — nobody actually solved anything today. At best, you got lucky.  Someone is going to walk away from this looking very clean, and that's when town games end.
+Day 3 discussion phase ends.
+Day 3 voting phase begins.
+Reimu: I vote to lynch Marisa.  Everything lines up.
+Marisa: I vote to lynch Sakuya. Enjoy your freebie.
+Daiyousei: I vote to lynch Marisa. Confirmed guilty.
+Cirno: I vote to lynch Marisa. Easy.
+Meiling: I vote to lynch Marisa. This is done.
+Patchouli: I vote to lynch Marisa. No point dragging it out.
+Sakuya: I vote to lynch Marisa. Confirmed guilty by my investigation.
+Remilia: I vote to lynch Marisa. Pretty obvious what is happening.
+Marisa has died.  Lynched by vote (7 votes)
+Marisa was MAFIA.
+Day 3 voting phase ends.
+Day 3 ends.
+
+Night 4 begins
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu:  Sakuya has to die tonight. The Doctor can't protect her again, and leaving a confirmed Sheriff alive is suicide. You did your best, Marisa — 5v1 will be rough but I'll take it from here.
+Mafia vote phase begins.
+Reimu votes to kill Sakuya.
+Mafia has chosen to kill Sakuya.
+Mafia night actions end.
+Sheriff night phase begins.
+[Sheriff Discussion] Sakuya:  I'm almost certainly dead tonight, but there's no reason to waste an investigation in case I'm wrong. Reimu has stayed just clean enough through all of this to worry me.
+Sheriff Sakuya investigates Reimu.
+Reimu is MAFIA!
+[Sheriff Discussion] Sakuya: That settles it.  If I survive the night, we win.
+Sheriff night phase ends.
+Doctor night phase begins.
+[Doctor Discussion] Meiling:  Sakuya is dead if Mafia wants her tonight, and I can't stop that. Cirno is the other confirmed town, and protecting her preserves the most information going into tomorrow. I'll keep self-protect in reserve in case I need it tomorrow night.
+Doctor Meiling protects Cirno.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei:  Marisa flipping Mafia explains a lot, but nothing points cleanly to the last mafia yet.  With the Sheriff likely dying tonight, firing blind risks hitting confirmed town. I'll hold my shot again.
+Vigilante shoots nobody tonight.
+Vigilante night phase ends.
+Night 4 ends.
+
+Day 4 begins.
+Sakuya has been found dead, killed during the night!
+Remaining players (6): Reimu, Daiyousei, Cirno, Meiling, Patchouli, Remilia
+Day 4 discussion phase begins.
+Cirno:  Sheriff's dead, but me and Meiling are cleared. One Mafia left among the four of you.  Also, we shouldn’t forget there could still be a vigilante out there.
+Daiyousei: At this point we should be careful with concrete claims. Vote history matters more than vibes now. Anyone who voted suspiciously during days 1–3?
+Remilia:  Day 2, Reimu voted Sakuya along with Marisa.  Could be mafia coordination.
+Reimu:  What?  No, I voted Meiling on Day 2. Marisa was the only one who voted Sakuya.
+Patchouli:  Remilia, I just checked.  Reimu was on Meiling, not Sakuya.
+Remilia:  I remember them both on Sakuya. That's what made it suspicious.  Reimu and Marisa have always been coordinating together until Reimu bussed her last round.
+Reimu: At this point, either Remilia is lying or she's dangerously wrong and stubborn. Either way, that's not something we can ignore this late in the game.
+Daiyousei:  Mafia lie about past votes — it's easy to gaslight details people don't double-check.
+Cirno: Agreed. Rewriting vote history is a textbook mafia move.  If this is Mafia trying to force a mislynch while behind, they must be desperate.
+Remilia:  That's not gaslighting, that's how I remember it.
+Meiling:  Doubling down on a provably false detail is how town mislynches happen — and how mafia push them.
+Day 4 discussion phase ends.
+Day 4 voting phase begins.
+Reimu: I vote to lynch Remilia. She lied about my day 2 vote history to try to mislynch me.
+Daiyousei: I vote to lynch Remilia. Rewriting vote history after correction is scummy.
+Cirno: I vote to lynch Remilia. The facts don't match her story.
+Meiling: I vote to lynch Remilia. Doubling down on a provably false detail is a bad sign.
+Patchouli: I vote to lynch Remilia. The log contradicts her claim.
+Remilia: I vote to lynch Reimu.  When I flip town you'd better get lynch her!
+Remilia has died. Lynched by vote (5 votes).
+Remilia was TOWN.
+Day 4 ends.
+
+Night 5 begins.
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu:  The mislynch bought me breathing room. Cirno and Meiling are both confirmed town, so Meiling is probably protecting either Cirno or herself tonight. I can't know which one she covered last night, so the safer play is to remove Cirno and avoid a likely self-protect.  If she's protected tonight, I can at least get her tomorrow.  Also, I can't rule out a vigilante still being alive, so I have to stay mostly defensive to avoid a sudden loss.
+Mafia vote phase begins.
+Reimu votes to kill Cirno
+Mafia has chosen to kill Cirno
+Mafia night actions end.
+Doctor night phase begins.
+[Doctor Discussion] Meiling:  I chose to protect Cirno last night, so I’ll self-protect tonight.  We're the two confirmed town so we're the only good choices I can make here.
+Doctor Meiling protects Doctor Meiling.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei:  Remilia flipped town.  She really was wrong about Reimu's vote history but that doesn't necessarily clear Reimu.  It's got to be her or Patchouli;  Meiling and Cirno are both confirmed town.  Should I go for the shot then?  Shooting now is high risk — if I'm wrong, I hand Mafia the game. If I wait, I can push tomorrow with more leverage and still fire later if needed as long as I avoid being lynched.  It's a tough choice, but I'm holding the shot.
+Vigilante shoots nobody tonight.
+Vigilante night phase ends.
+Night 5 ends.
+
+Day 5 begins.
+Cirno has been found dead, killed during the night!
+Remaining players (4): Reimu, Daiyousei, Meiling, Patchouli
+Day 5 discussion phase begins.
+Daiyousei:  We're down to four. Cirno was a clean kill. Meiling is confirmed doctor.  That leaves Reimu or Patchouli, and I'm leaning Reimu based on how hard she pushed the Remilia mislynch.
+Reimu:  We all pushed the Remilia mislynch.  Remilia was provably wrong about my vote and doubled down. Ending that day quickly was correct play.
+Patchouli:  I agreed with the lynch, but I don't like how quickly you turned "she's wrong" into "we have to kill her now." That kind of confidence can also come from Mafia knowing the board and jumping on a mistake for an easy mislynch.
+Reimu:  Because it was unavoidable. Letting someone rewrite vote history at LYLO numbers is how town throws games.  This feels like Daiyousei forcing a mislynch to win the game for the mafia.
+Meiling:  Daiyousei, what exactly makes you suspect Reimu?  I think you're both kinda suspicious right now.
+Daiyousei:  Come on!  She was the first to push for the lynch yesterday.
+Reimu:  I only said we couldn't ignore it.  YOU were the first one to level an actual mafia accusation.
+Patchouli:  This is a tough vote.  Remilia mentioned that Reimu seemed to play like they were coordinating with Marisa until Sakuya's Sheriff claim came out.  I can't help but think that there's some merit there.  It's a tough call but Reimu I think you're the most likely mafia.
+Reimu:  Don't let Daiyousei throw the game, not when we're this close!
+Meiling:  Daiyousei was the first to make a hard accusation yesterday and she came out swinging with a hard mafia accusation today.  Feels like how a desperate final remaining mafia player would play.
+Day 5 discussion phase ends.
+Day 5 voting phase begins.
+Reimu: I vote to lynch Daiyousei. This is a reckless forced push that ends the game if it’s wrong.
+Daiyousei: I vote to lynch Reimu. Her urgency around the Remilia lynch still doesn’t sit right with me and I'm only more convinced now.
+Meiling: I vote to lynch Daiyousei. The aggression and timing feel like a desperation play.
+Patchouli: I vote to lynch Reimu. Too many small things point in her direction.
+Nobody died, as no player received a majority of votes.
+Day 5 voting phase ends.
+Day 5 ends.
+
+Night 6 begins.
+Mafia night actions begin.
+Mafia Discussion phase begins.
+[Mafia Discussion] Reimu:  This is the real endgame. Three targets, three very different boards tomorrow.  If I kill Daiyousei, it’s too obvious — I look like I’m removing the loudest opposition.  If I kill Patchouli, Daiyousei might still convince Meiling to lynch me.  Meiling’s protect is the real variable. At this point her only real options are Cirno or herself. I killed Cirno last night, so I’m guessing she was self-protecting. If I’m right, she can’t cover herself tonight.  That puts me into Day 6 against two players who already voted to lynch me — but Daiyousei is a hardliner, and Patchouli is still persuadable. The Meiling kill won’t obviously point back at me; she voted with me on Day 5.  Whatever happens, I need to be ready for a brawl tomorrow.
+Mafia vote phase begins.
+Reimu votes to kill Meiling
+Mafia has chosen to kill Meiling
+Mafia night actions end.
+Doctor night phase begins.
+[Doctor Discussion] Meiling:  This is the nightmare scenario. No lynch, four players left, and no more room for error.  I’m confirmed, which means if Mafia kills tonight, it’s either aimed at me or meant to set up tomorrow. I can’t protect myself twice in a row, so I have to choose one of the other three.  Who is the danger?  Patchouli is cautious, not aggressive. She doesn’t feel like someone who would force the game tonight.  If she's mafia, she's a damn clever one.  Reimu is under suspicion, but she’s been defensive, not pushy. If she’s Mafia, she probably expects to be targeted.  Daiyousei worries me the most. She’s been escalating every day since Remilia, pushing harder, narrowing the game. If she's mafia, Reimu is definitely the target.  It's a risky choice but I think I've got to go for Reimu.  I hope I'm right.
+I’m protecting Reimu.
+Doctor Meiling protects Reimu.
+Doctor night phase ends.
+Vigilante night phase begins.
+[Vigilante Discussion] Daiyousei:  This is it.  If I wait again, Mafia controls tomorrow completely.  Reimu has conveniently benefited from every mafia kill in the entire game and keeps surviving every close call.  Patchouli sees it too.  If I'm wrong, it's probably game over — but if I'm right, I win us the game right now.  I'm taking the shot. 
+Vigilante shoots Reimu tonight.
+Vigilante night phase ends.
+Night 6 ends.
+
+Day 6 begins.
+Meiling has been found dead, killed during the night!
+Remaining players (3): Reimu, Daiyousei, Patchouli
+Day 6 discussion phase begins.
+Daiyousei:  Well, crap.  I’m the Vigilante.  I shot Reimu last night. The shot didn’t go through. Meiling protected her, and Mafia killed Meiling. If that doesn’t tell you who the last Mafia is, nothing will.
+Reimu:  You’re fakeclaiming vigilante to pretend this isn't exactly what it looks like:  you killed Meiling, a confirmed power role, to eliminate a confirmed townie who was inclined to vote against you.  There’s no proof of any of your claims, and Meiling is the obvious target aside from me.
+Patchouli:  Slow down.  This is crazy.  Daiyousei, you're telling me Meiling protected her own murderer last night?  Is that even possible?  
+Daiyousei:  Doctor protects stop vigilante shots. It’s rare, but it happens.  Anyways Patchouli you already agreed with me that Reimu was sus.  Don't back out now.
+Reimu:  Daiyousei, your story has a hole in it.  If you were really vigilante, why not hold the bullet for today, roleclaim, and try to get us to abstain on the lynch?  Then if your intuition is correct you would shoot the remaining mafia with no possibility of doctor interference.
+Daiyousei:  Because I didn’t think Meiling would protect a possible Mafia. Because you could’ve killed me instead. Because last-minute ‘just trust me’ claims don’t work. And because you’d argue it was too risky — and Patchouli would listen.
+Patchouli: If Daiyousei is lying, then Meiling just dies for nothing. If she’s telling the truth, then Meiling died protecting the wrong person. Either way, the night revolves around Reimu surviving.
+Reimu: Or it revolves around Daiyousei panicking when her push failed and inventing a story that can’t be verified now that Meiling is dead.  Late game fakeclaims are a risky play, but Daiyousei is relying on the idea that a far-fetched lie is more believable than a more mundane one.  Patchouli, we're so close.  Don't throw the game!
+Daiyousei: Meiling voted against me yesterday because she thought I was dangerous. That’s exactly why Mafia exploited it. This didn’t come out of nowhere.  Please, Patchouli, believe me.  Look at who benefits.  If I was mafia, taking out someone voting against me is the most obvious desperation play imaginable. That’s not how the mafia in this game has played — they’ve been surgical every single night.
+Patchouli: ...Yeah. This is tough.  No matter how I slice it, Meiling dying only helps one person.  Mafia has been playing a good game up until now;  whether it's Daiyousei or Reimu, they're not the type to play sloppy at the last minute.  I also don't know if the mafia which stayed under the radar so long is the same mafia that's capable of some kind of crazy last minute vigilante fakeclaim.  Both of your stories are possible, and both fit the facts;  the only question is how many steps ahead I'm guessing the mafia are thinking.  If I guess wrong, we lose.  Damn.
+Day 6 discussion phase ends.
+Day 6 voting phase begins.
+Reimu: I vote to lynch Daiyousei. This entire story only exists to cover killing Meiling and force a 50/50 at the end.  Hope we win the coinflip
+Daiyousei: I vote to lynch Reimu. I still can't believe what happened with Meiling saving Reimu from my bullet.  It's all up to Patchouli now.
+Patchouli: I vote to lynch Reimu. Meiling’s death only makes sense if she was protecting the wrong person.  Fingers crossed!
+Reimu has died. Lynched by vote (2 votes).
+Reimu was MAFIA.
+TOWN WINS!
+
+ROLE REVEAL:
+Reimu:  mafia
+Marisa: mafia
+Rumia: town
+Daiyousei: vigilante
+Cirno: town
+Koakuma: town
+Meiling: doctor
+Patchouli: town
+Sakuya: sheriff
+Remilia: town
+Flandre: mafia
+Postgame discussion phase begins.
+Patchouli: Wow. That was brutal. I don’t think I’ve ever spent that long staring at a final vote.
+Daiyousei: I genuinely thought I’d thrown the game when Meiling died. Shooting into a  doctor protect felt awful.  I've never seen that happen before.
+Meiling: I protected Reimu because I thought Daiyousei was the last mafia. I was wrong — but I don’t regret the logic.  Daiyousei, you shouldn't have been so aggressive on day 5.  If you just laid low and didn't make any obvious attacks I probably would have protected you night 5 instead!
+Reimu: Honestly, fooling the doctor to save me from a vigilante's bullet was totally worth it.  Even though we lost I'm gonna remember that for a while.
+Sakuya: From my perspective, the game was basically decided the moment I roleclaimed on day 3. Dying before I could reveal it was painful, but town actually played it out correctly anyway.  You guys almost fumbled at the end though.
+Marisa: I still think the Flandre bus was the right call. It bought us a ton of credibility — we just got unlucky with the Sheriff.
+Flandre: I'm not sure about that.  It was a risky play and at best you got 1 safe kill out of it.  With the 11-player spread losing a mafia day 1 is just rough in general.
+Rumia: Well, I got killed night 1, but it's good that the mafia hit a regular townie like me and not a power role.  Town really relied heavily on the sheriff and doctor this time.
+Cirno: I liked that nobody just auto-believed claims. Even at the end, Patchouli actually thought it through instead of coin-flipping.
+Patchouli: I was seconds away from voting the other way. The deciding factor was simple: Meiling dying only makes sense if she protected wrong, not if Daiyousei panicked.
+Meiling: And that’s Mafia for you. Even when you play “correctly,” you can still lose — but the reasoning matters more than the outcome.
+Reimu: Agreed. That was a clean, high-skill endgame. No obvious throws, no dumb slips. Just pressure and timing.
+Postgame discussion phase ends.
+MVP voting phase begins.
+Patchouli: I vote Sakuya. Getting two clears and two mafia hits before dying basically solved the game.
+Daiyousei: I vote Sakuya. The Marisa investigation broke the mafia core wide open.
+Meiling: I’m voting Meiling. I don't want to toot my own horn but aside from the near-fumble at the end I had some pretty solid reads and clutches.  Doctor is a hard role to play so even just one protect is pretty impressive, let alone a sheriff on the turn before he roleclaims with 2 town clears and a guilty.
+Cirno: I vote Sakuya. Sheriff play was clean and disciplined.
+Remilia: I vote Reimu. They managed to play quite a good mafia game with some really clever kills.  And sorry to Meiling but mafia seemed consistently a step ahead of you.
+Marisa: I vote Sakuya. Losing her was the turning point.  I had no way of stopping you at that point.  Mafia don’t bus like that unless they're properly screwed.
+Flandre: I vote Reimu.  I watched the whole mafia side after I died and let me tell you, they were this close to pulling through at the end. Reimu kept the perfect balance of passive and aggressive.
+Reimu: I vote Daiyousei. That Night 6 shot was the only move that could actually break the stalemate and force a real endgame.  If I didn't get lucky with the Meiling save it would have been a much different game.  And you managed to win Patchouli over at the end too.
+Sakuya: I vote Patchouli.  In the end she was the single tiebreaking vote.  She figured out the last mafia and was the decisive factor leading to the town victory.
+Rumia: I vote Sakuya. Even dying Night 1, it was obvious later that her investigations were quietly steering the entire game.  Her confirmed clears on Cirno and Meiling had a huge effect on the voting from day 4 onwards.
