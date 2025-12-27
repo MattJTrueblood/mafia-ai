@@ -31,7 +31,6 @@ DEFAULT_MODELS = [
     "openai/gpt-5-mini",                            # $0.25 / $2.00
     "openai/gpt-4.1-mini",                          # $0.40 / $1.60 (starting at)
     "mistralai/mistral-large-2512",                 # $0.50 / $1.50
-    "openai/gpt-oss-20b",                           # $0.03 / $0.14
 ]
 
 # Model pricing dictionary (per 1M tokens: input / output)

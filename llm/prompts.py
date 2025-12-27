@@ -585,13 +585,12 @@ IMPORTANT: Your message will be PUBLIC and visible to ALL players.
     day1_rules = ""
     if game_state.day_number == 1:
         day1_rules = """
-DAY 1 GUIDELINES - Limited information available:
-- There is very little public information on Day 1. You must base your message on OBSERVABLE BEHAVIORS only
-- Valid Day 1 observations include: posting frequency, hedging language, deflecting questions, mirroring others' opinions, contradictions, unusual voting patterns.
-- If you have no concrete observation, try asking probing questions, make a labeled "pressure" statement to generate reactions, or express uncertainty.
-- Do NOT invent rationales or claim to have information you don't have.
-- This is the start of the game. There is no previous round or discussion history beyond what you have seen.
-- Because it is early in the game, most players will not have spoken yet. Try to avoid pressing players this early based solely on lack of participation.
+DAY 1 WARNING - This is the FIRST discussion. There is NO prior history.
+- Do NOT ask "what did you do last night" or "who defended who" - there was no prior discussion.
+- Do NOT reference voting patterns, previous behavior, or past statements - none exist yet.
+- The ONLY things that happened before now: night kills (shown in PUBLIC_FACTS).
+- Valid Day 1 topics: react to the night kill, ask someone their read on a player, share a gut suspicion.
+- Most people haven't spoken yet. Don't pressure silence - it's Day 1.
 """
 
     # Output quality rules
@@ -622,26 +621,32 @@ Make your point clearly and concisely.
 {output_rules}
 {interrupt_context}
 
-You are in the day phase discussion. All surviving players can discuss what happened and share information. You should:
-- Analyze what happened during the night
-- Share relevant information (if you're town, be helpful; if you're mafia, be deceptive)
-- Look for suspicious behavior
-- Defend yourself if accused
+You are in the day phase discussion.
 
-It's your turn to speak. You chose to speak (you did not pass), so you MUST provide a meaningful message.
+It's your turn to speak. Keep it SHORT.
 
-IMPORTANT:
-- Write your message directly as plain text (1-3 sentences). Do NOT use JSON format.
-- You MUST say something substantive - you already had the option to pass and chose not to.
-- Your message will be visible to all players. Only reference publicly available information.
+CRITICAL - BE BRIEF:
+- Maximum 1-2 sentences. No more.
+- Do NOT ramble, explain your reasoning, or ask multiple questions.
+- Make ONE point, then stop.
+- Write plain text only. No JSON.
 
-Example messages:
-- "I think Bob is acting suspicious - he's been deflecting every question asked of him."
-- "Alice, what are your thoughts on last night's kill? You've been quiet."
-- "I need to defend myself here. I'm not mafia, and the fact that I voted for Charlie yesterday should show that."
-- "I'm the Sheriff. I investigated Bob last night and he is MAFIA. We need to vote him out."
+CRITICAL - DON'T REPEAT OTHERS:
+- Read what's already been said above.
+- If someone already made a point or asked a question, do NOT repeat it.
+- Add something NEW - a different suspicion, a new question, or defend someone.
+- If you have nothing new to add, accuse or defend someone specific.
 
-Your message:"""
+Good examples (notice how short):
+- "Bob, why did you vote for Alice yesterday?"
+- "I think Charlie is suspicious. He's been too quiet."
+- "I'm the Sheriff. I checked Bob - he's mafia."
+- "That's a fair point, but I still don't trust Diana."
+
+Bad examples (TOO LONG - don't do this):
+- "Well, I've been thinking about what happened last night and I have several observations to share with everyone about the current state of the game..."
+
+Your message (1-2 sentences MAX):"""
 
     return prompt
 

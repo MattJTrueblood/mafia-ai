@@ -575,27 +575,44 @@ async function showPlayerContext(playerName) {
         // Display response
         const response_data = data.context.response || {};
         let responseText = '';
-        if (response_data.content) {
-            responseText = response_data.content;
-        }
+
+        // Content section
+        responseText += '=== CONTENT ===\n';
+        responseText += response_data.content || '(empty)';
+
+        // Structured output section
+        responseText += '\n\n=== STRUCTURED OUTPUT ===\n';
         if (response_data.structured_output) {
-            responseText += '\n\n--- Parsed Structured Output ---\n';
             responseText += JSON.stringify(response_data.structured_output, null, 2);
+        } else {
+            responseText += '(none)';
         }
 
-        // Add debug info if available
-        if (data.context.debug) {
-            responseText += '\n\n--- Debug Info ---\n';
-            responseText += JSON.stringify(data.context.debug, null, 2);
+        // Reasoning section (always show)
+        responseText += '\n\n=== MODEL REASONING ===\n';
+        if (response_data.reasoning) {
+            responseText += response_data.reasoning;
+        } else {
+            responseText += '(none - OpenAI models do not expose reasoning tokens)';
         }
 
-        // Add error info if available
+        // Raw API response section
+        responseText += '\n\n=== RAW API MESSAGE ===\n';
+        if (response_data.raw_message) {
+            responseText += JSON.stringify(response_data.raw_message, null, 2);
+        } else {
+            responseText += '(not available)';
+        }
+
+        // Error section (always show)
+        responseText += '\n\n=== ERROR ===\n';
         if (data.context.error) {
-            responseText += '\n\n--- ERROR ---\n';
             responseText += data.context.error;
+        } else {
+            responseText += '(none)';
         }
 
-        document.getElementById('modal-response').textContent = responseText || 'No response available';
+        document.getElementById('modal-response').textContent = responseText;
 
         // Show modal
         document.getElementById('context-modal').classList.add('active');
@@ -622,14 +639,15 @@ function copyContext() {
 
     const ctx = currentContextData.context;
     const prompt = ctx.messages?.[0]?.content || 'No prompt';
-    const response = ctx.response?.content || 'No response';
+    const response = ctx.response?.content || '(empty)';
     const structured = ctx.response?.structured_output
         ? JSON.stringify(ctx.response.structured_output, null, 2)
-        : 'None';
-    const debug = ctx.debug
-        ? JSON.stringify(ctx.debug, null, 2)
-        : 'None';
-    const error = ctx.error || 'None';
+        : '(none)';
+    const reasoning = ctx.response?.reasoning || '(none)';
+    const rawMessage = ctx.response?.raw_message
+        ? JSON.stringify(ctx.response.raw_message, null, 2)
+        : '(not available)';
+    const error = ctx.error || '(none)';
     const estimatedTokens = Math.ceil(prompt.length / 4);
 
     const textToCopy = `=== LLM Context for ${currentContextData.player_name} ===
@@ -642,14 +660,17 @@ Est. Tokens: ${estimatedTokens.toLocaleString()}
 === PROMPT ===
 ${prompt}
 
-=== RESPONSE ===
+=== CONTENT ===
 ${response}
 
 === STRUCTURED OUTPUT ===
 ${structured}
 
-=== DEBUG INFO ===
-${debug}
+=== MODEL REASONING ===
+${reasoning}
+
+=== RAW API MESSAGE ===
+${rawMessage}
 
 === ERROR ===
 ${error}

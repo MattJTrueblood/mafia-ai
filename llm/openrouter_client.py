@@ -57,22 +57,32 @@ class OpenRouterClient:
             "X-Title": "Mafia AI Game",  # Optional
         }
 
+        # Detect reasoning models that need special handling
+        model_lower = model.lower()
+        is_reasoning_model = any(x in model_lower for x in ["gpt-4.5", "gpt-5", "o1", "o3"])
+
         payload = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
         }
 
+        # For reasoning models, set minimal effort to maximize output tokens
+        # and request reasoning to be included in the response
+        # Note: OpenAI o-series models do NOT return reasoning tokens regardless of exclude setting
+        if is_reasoning_model:
+            payload["reasoning"] = {
+                "effort": "minimal",  # 10% reasoning, 90% output - maximum output focus
+                "exclude": False,     # Include reasoning in response (if model supports it)
+            }
+
         if response_format:
             payload["response_format"] = response_format
 
         if max_tokens:
             # Newer OpenAI models (gpt-4.5, o1, o3, etc.) use max_completion_tokens
-            # instead of max_tokens. Detect these models and use the right parameter.
-            model_lower = model.lower()
-            uses_new_param = any(x in model_lower for x in ["gpt-4.5", "gpt-5", "o1", "o3"])
-
-            if uses_new_param:
+            # instead of max_tokens.
+            if is_reasoning_model:
                 payload["max_completion_tokens"] = max_tokens
             else:
                 payload["max_tokens"] = max_tokens
@@ -98,14 +108,42 @@ class OpenRouterClient:
 
                 data = response.json()
 
-                # Extract content
-                content = data["choices"][0]["message"]["content"]
+                # Extract message object
+                message = data["choices"][0]["message"]
 
-                result = {"content": content}
+                # Extract content
+                content = message.get("content") or ""
+
+                result = {
+                    "content": content,
+                    "raw_message": message,  # Include raw message for debugging
+                }
+
+                # Capture reasoning tokens if present (for reasoning models)
+                # OpenRouter returns reasoning in 'reasoning_details' array
+                # Note: OpenAI o-series models do NOT return their reasoning tokens
+                if "reasoning_details" in message and message["reasoning_details"]:
+                    reasoning_parts = []
+                    for detail in message["reasoning_details"]:
+                        if detail.get("type") == "reasoning.summary" and detail.get("summary"):
+                            reasoning_parts.append(f"[Summary] {detail['summary']}")
+                        elif detail.get("type") == "reasoning.text" and detail.get("text"):
+                            reasoning_parts.append(detail["text"])
+                        elif detail.get("text"):
+                            reasoning_parts.append(detail["text"])
+                        elif detail.get("summary"):
+                            reasoning_parts.append(detail["summary"])
+                    if reasoning_parts:
+                        result["reasoning"] = "\n\n".join(reasoning_parts)
+                # Also check legacy field names just in case
+                elif "reasoning" in message and message["reasoning"]:
+                    result["reasoning"] = message["reasoning"]
 
                 # Extract structured output if present
-                if "structured_outputs" in data.get("choices", [{}])[0].get("message", {}):
-                    result["structured_output"] = data["choices"][0]["message"]["structured_outputs"]
+                if "structured_outputs" in message:
+                    result["structured_output"] = message["structured_outputs"]
+                elif "structured_output" in message:
+                    result["structured_output"] = message["structured_output"]
                 elif response_format:
                     # Try to parse JSON from content if structured output not available
                     try:
