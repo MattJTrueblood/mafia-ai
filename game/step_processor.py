@@ -19,7 +19,7 @@ from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from llm.prompts import (
     build_night_prompt,
     build_day_discussion_prompt,
-    build_interrupt_check_prompt,
+    build_turn_poll_prompt,
     build_day_voting_prompt,
     build_mafia_vote_prompt,
     build_mafia_discussion_prompt,
@@ -67,13 +67,14 @@ VOTE_SCHEMA = {
     "required": ["vote", "explanation"]
 }
 
-INTERRUPT_SCHEMA = {
+TURN_POLL_SCHEMA = {
     "type": "object",
     "properties": {
         "wants_to_interrupt": {"type": "boolean"},
+        "wants_to_respond": {"type": "boolean"},
         "wants_to_pass": {"type": "boolean"}
     },
-    "required": ["wants_to_interrupt", "wants_to_pass"]
+    "required": ["wants_to_interrupt", "wants_to_respond", "wants_to_pass"]
 }
 
 
@@ -475,20 +476,9 @@ def process_step(
         # Check if discussion should end
         messages = game_state.phase_data.get("discussion_messages", [])
         max_messages = 10
-        consecutive_no_interrupt = game_state.phase_data.get("consecutive_no_interrupt_rounds", 0)
-        alive_count = len(game_state.get_alive_players())
 
         if len(messages) >= max_messages:
-            # Max messages reached
-            emit_status("discussion_end")
-            game_state.add_event("system", f"Day {game_state.day_number} discussion phase ends.", "all")
-            game_state.current_step = GameState.STEP_VOTING
-            game_state.step_index = 0
-            emit_update()
-            return StepResult()
-
-        if consecutive_no_interrupt >= 2 and len(messages) >= alive_count:
-            # No one has urgent info
+            # Max messages reached - end discussion
             emit_status("discussion_end")
             game_state.add_event("system", f"Day {game_state.day_number} discussion phase ends.", "all")
             game_state.current_step = GameState.STEP_VOTING
@@ -533,12 +523,19 @@ def process_step(
             game_state.step_index = 0
             return StepResult()
 
-        # Poll for interrupts and passes (exclude only the last speaker, not the current round-robin candidate)
-        # Everyone except the last speaker can interrupt or pass
-        emit_status("interrupt_polling", waiting_player=None)
-        interrupting, passing = _poll_for_interrupts(
+        # Check if last message was a respond - if so, block further responds
+        # This prevents infinite respond chains
+        last_was_respond = game_state.phase_data.get("last_was_respond", False)
+
+        # Poll for interrupts, responds, and passes (exclude only the last speaker)
+        emit_status("turn_polling", waiting_player=None)
+        interrupting, responding, passing = _poll_for_turn_actions(
             game_state, last_speaker, llm_client, cancel_event, emit_status, emit_player_status
         )
+
+        # If last message was a respond, ignore all respond requests (only allow interrupts)
+        if last_was_respond:
+            responding = []
 
         # Track players who passed this round
         round_passes = game_state.phase_data.get("round_passes", [])
@@ -547,28 +544,36 @@ def process_step(
                 round_passes.append(passer)
         game_state.phase_data["round_passes"] = round_passes
 
-        # Emit status with passing players info
-        emit_status("interrupt_result", interrupting_players=interrupting, passing_players=round_passes)
+        # Emit status with polling results
+        emit_status("turn_poll_result",
+            interrupting_players=interrupting,
+            responding_players=responding,
+            passing_players=round_passes)
 
         if interrupting:
-            # Someone wants to interrupt - pick randomly
-            interrupter_name = random.choice(interrupting)
+            # Someone wants to interrupt - pick whoever spoke least recently
+            interrupter_name = _select_speaker_by_recency(interrupting, game_state)
             game_state.phase_data["next_speaker"] = interrupter_name
             game_state.phase_data["is_interrupt"] = True
-            game_state.phase_data["consecutive_no_interrupt_rounds"] = 0
+            game_state.phase_data["is_respond"] = False
+        elif responding:
+            # Someone wants to respond - pick whoever spoke least recently
+            responder_name = _select_speaker_by_recency(responding, game_state)
+            game_state.phase_data["next_speaker"] = responder_name
+            game_state.phase_data["is_interrupt"] = False
+            game_state.phase_data["is_respond"] = True
         else:
             # Check if current speaker passed
             if current_speaker_name in round_passes:
                 # Current speaker passed - advance to next speaker
                 game_state.phase_data["current_speaker_index"] = speaker_idx + 1
-                game_state.phase_data["consecutive_no_interrupt_rounds"] = consecutive_no_interrupt + 1
                 # Don't set next_speaker, just loop back to poll
                 return StepResult()
 
-            # No interrupts and speaker didn't pass - current speaker goes
+            # No interrupts/responds and speaker didn't pass - current speaker goes
             game_state.phase_data["next_speaker"] = current_speaker_name
             game_state.phase_data["is_interrupt"] = False
-            game_state.phase_data["consecutive_no_interrupt_rounds"] = consecutive_no_interrupt + 1
+            game_state.phase_data["is_respond"] = False
 
         # Move to getting the message
         game_state.current_step = GameState.STEP_DISCUSSION_MESSAGE
@@ -578,6 +583,7 @@ def process_step(
     elif step == GameState.STEP_DISCUSSION_MESSAGE:
         speaker_name = game_state.phase_data.get("next_speaker")
         is_interrupt = game_state.phase_data.get("is_interrupt", False)
+        is_respond = game_state.phase_data.get("is_respond", False)
 
         if not speaker_name:
             # No speaker, go back to polling
@@ -589,25 +595,44 @@ def process_step(
             game_state.current_step = GameState.STEP_DISCUSSION_POLL
             return StepResult()
 
-        emit_status("waiting_message", waiting_player=speaker_name, is_interrupt=is_interrupt)
+        emit_status("waiting_message", waiting_player=speaker_name, is_interrupt=is_interrupt, is_respond=is_respond)
 
-        message = _get_discussion_message(game_state, speaker, is_interrupt, llm_client, cancel_event, emit_player_status)
+        message = _get_discussion_message(game_state, speaker, is_interrupt, is_respond, llm_client, cancel_event, emit_player_status)
 
         if message:
-            game_state.add_event("discussion", message, "public", player=speaker_name)
+            # Track message index for recency-based speaker selection
+            msg_index = len(game_state.phase_data["discussion_messages"])
+            game_state.phase_data["player_last_message_index"][speaker_name] = msg_index
+
+            # Determine turn type for UI display (not included in LLM context)
+            if is_interrupt:
+                turn_type = "interrupt"
+            elif is_respond:
+                turn_type = "respond"
+            else:
+                turn_type = "regular"
+
+            game_state.add_event("discussion", message, "public", player=speaker_name,
+                                metadata={"turn_type": turn_type})
             game_state.phase_data["discussion_messages"].append({
                 "player": speaker_name,
                 "message": message,
-                "is_interrupt": is_interrupt
+                "is_interrupt": is_interrupt,
+                "is_respond": is_respond
             })
             # Track last speaker to prevent consecutive messages
             game_state.phase_data["last_speaker"] = speaker_name
+            # Track if last message was a respond (to block respond chains)
+            game_state.phase_data["last_was_respond"] = is_respond
 
-        # Advance speaker if this wasn't an interrupt
-        if not is_interrupt:
-            game_state.phase_data["current_speaker_index"] = (
-                game_state.phase_data.get("current_speaker_index", 0) + 1
-            )
+            # Move speaker to back of round-robin queue (for all message types)
+            speaker_order = game_state.phase_data.get("speaker_order", [])
+            if speaker_name in speaker_order:
+                speaker_order.remove(speaker_name)
+                speaker_order.append(speaker_name)
+                game_state.phase_data["speaker_order"] = speaker_order
+                # Reset speaker index since order changed
+                game_state.phase_data["current_speaker_index"] = 0
 
         emit_update()
 
@@ -1094,7 +1119,25 @@ def _resolve_night_actions(game_state: GameState):
 # DAY ACTION EXECUTORS
 # =============================================================================
 
-def _poll_for_interrupts(
+def _select_speaker_by_recency(candidates: List[str], game_state: GameState) -> str:
+    """Select candidate whose last message was least recent. Random if tied.
+
+    Players who haven't spoken yet get highest priority (index -1).
+    """
+    if len(candidates) == 1:
+        return candidates[0]
+
+    last_indices = game_state.phase_data.get("player_last_message_index", {})
+
+    def recency_key(name):
+        return last_indices.get(name, -1)  # -1 = never spoken = highest priority
+
+    min_index = min(recency_key(c) for c in candidates)
+    tied = [c for c in candidates if recency_key(c) == min_index]
+    return random.choice(tied)
+
+
+def _poll_for_turn_actions(
     game_state: GameState,
     exclude_player: str,
     llm_client: OpenRouterClient,
@@ -1102,44 +1145,44 @@ def _poll_for_interrupts(
     emit_status,
     emit_player_status = None
 ) -> tuple:
-    """Poll all players to see who wants to interrupt or pass.
+    """Poll all players to see who wants to interrupt, respond, or pass.
     Uses parallel execution for faster polling.
 
     Returns:
-        Tuple of (interrupting_players, passing_players)
+        Tuple of (interrupting_players, responding_players, passing_players)
     """
     alive = game_state.get_alive_players()
     players_to_poll = [p for p in alive if p.name != exclude_player]
 
     if not players_to_poll:
-        return [], []
+        return [], [], []
 
     results = [None] * len(players_to_poll)
 
     def check_single_player(idx: int, player):
-        """Check a single player for interrupt/pass."""
+        """Check a single player for interrupt/respond/pass."""
         try:
             if cancel_event and cancel_event.is_set():
-                raise LLMCancelledException("Interrupt check cancelled")
+                raise LLMCancelledException("Turn poll cancelled")
 
             # Emit pending status
             if emit_player_status:
                 emit_player_status(player.name, "pending")
 
-            prompt = build_interrupt_check_prompt(game_state, player)
+            prompt = build_turn_poll_prompt(game_state, player)
             messages = [{"role": "user", "content": prompt}]
 
             player.last_llm_context = {
                 "messages": messages,
                 "timestamp": datetime.now().isoformat(),
-                "action_type": "interrupt_check",
+                "action_type": "turn_poll",
                 "phase": game_state.phase,
                 "day": game_state.day_number
             }
 
             response = llm_client.call_model(
                 player.model, messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "interrupt", "schema": INTERRUPT_SCHEMA}},
+                response_format={"type": "json_schema", "json_schema": {"name": "turn_poll", "schema": TURN_POLL_SCHEMA}},
                 temperature=0.3,
                 max_tokens=100,
                 cancel_event=cancel_event
@@ -1147,35 +1190,50 @@ def _poll_for_interrupts(
             player.last_llm_context["response"] = response
 
             wants_interrupt = False
+            wants_respond = False
             wants_pass = False
 
-            if "structured_output" in response:
+            # Check for empty response - log warning but continue
+            content = response.get("content", "")
+            if not content and "structured_output" not in response:
+                print(f"[TurnPoll] WARNING: Empty response from {player.name} ({player.model})")
+                # Treat as "wait for turn" - all False
+            elif "structured_output" in response:
                 wants_interrupt = response["structured_output"].get("wants_to_interrupt", False)
+                wants_respond = response["structured_output"].get("wants_to_respond", False)
                 wants_pass = response["structured_output"].get("wants_to_pass", False)
             else:
                 try:
-                    content = response.get("content", "")
                     idx_json = content.find("{")
                     if idx_json >= 0:
                         parsed = json.loads(content[idx_json:content.rfind("}")+1])
                         wants_interrupt = parsed.get("wants_to_interrupt", False)
+                        wants_respond = parsed.get("wants_to_respond", False)
                         wants_pass = parsed.get("wants_to_pass", False)
                 except:
-                    pass
+                    print(f"[TurnPoll] WARNING: Failed to parse JSON from {player.name}: {content[:100]}")
 
             result = {
                 "player": player.name,
                 "wants_to_interrupt": wants_interrupt,
+                "wants_to_respond": wants_respond,
                 "wants_to_pass": wants_pass
             }
             results[idx] = result
 
         except LLMCancelledException:
             raise
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(f"[TurnPoll] EXCEPTION for {player.name} ({player.model}): {e}")
+            traceback.print_exc()
+            # Store error in context so it shows in debug panel
+            player.last_llm_context["response"] = {"content": "", "error": str(e)}
+            player.last_llm_context["error"] = str(e)
             results[idx] = {
                 "player": player.name,
                 "wants_to_interrupt": False,
+                "wants_to_respond": False,
                 "wants_to_pass": False,
                 "error": True
             }
@@ -1193,29 +1251,34 @@ def _poll_for_interrupts(
     # Wait for all to complete
     gevent.joinall(greenlets, raise_error=True)
 
-    # Collect results
+    # Collect results - interrupt takes priority over respond
     interrupting = []
+    responding = []
     passing = []
     for result in results:
         if result:
             if result.get("wants_to_interrupt"):
                 interrupting.append(result["player"])
+            elif result.get("wants_to_respond"):
+                # Only count as responding if not interrupting
+                responding.append(result["player"])
             if result.get("wants_to_pass"):
                 passing.append(result["player"])
 
-    return interrupting, passing
+    return interrupting, responding, passing
 
 
 def _get_discussion_message(
     game_state: GameState,
     player,
     is_interrupt: bool,
+    is_respond: bool,
     llm_client: OpenRouterClient,
     cancel_event,
     emit_player_status = None
 ) -> Optional[str]:
     """Get a discussion message from a player."""
-    prompt = build_day_discussion_prompt(game_state, player, is_interrupt=is_interrupt)
+    prompt = build_day_discussion_prompt(game_state, player, is_interrupt=is_interrupt, is_respond=is_respond)
     messages = [{"role": "user", "content": prompt}]
 
     # Emit pending status
@@ -1223,10 +1286,18 @@ def _get_discussion_message(
         emit_player_status(player.name, "pending")
 
     try:
+        # Determine action type for logging
+        if is_interrupt:
+            action_type = "discussion_message_interrupt"
+        elif is_respond:
+            action_type = "discussion_message_respond"
+        else:
+            action_type = "discussion_message"
+
         player.last_llm_context = {
             "messages": messages,
             "timestamp": datetime.now().isoformat(),
-            "action_type": "discussion_message_interrupt" if is_interrupt else "discussion_message",
+            "action_type": action_type,
             "phase": game_state.phase,
             "day": game_state.day_number
         }
@@ -1520,14 +1591,14 @@ def _execute_mafia_discussion(
         response = llm_client.call_model(
             mafia.model, messages,
             temperature=0.8,
-            max_tokens=200,
+            max_tokens=500,
             cancel_event=cancel_event
         )
         mafia.last_llm_context["response"] = response
 
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
-        return content[:300] if content else "No comment."
+        return content[:1000] if content else "No comment."
     finally:
         # Emit complete status
         if emit_player_status:
@@ -1603,14 +1674,14 @@ def _execute_role_discussion(
         response = llm_client.call_model(
             player.model, messages,
             temperature=0.8,
-            max_tokens=250,
+            max_tokens=500,
             cancel_event=cancel_event
         )
         player.last_llm_context["response"] = response
 
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
-        return content[:400] if content else "No comment."
+        return content[:1000] if content else "No comment."
     finally:
         # Emit complete status
         if emit_player_status:
@@ -1694,7 +1765,7 @@ def _execute_sheriff_post_investigation(
         response = llm_client.call_model(
             sheriff.model, messages,
             temperature=0.8,
-            max_tokens=200,
+            max_tokens=400,
             cancel_event=cancel_event
         )
         sheriff.last_llm_context["response"] = response
@@ -1702,7 +1773,7 @@ def _execute_sheriff_post_investigation(
         content = response.get("content", "").strip()
         # Strip surrounding quotes if present
         content = _strip_quotes(content)
-        return content[:400] if content else None
+        return content[:800] if content else None
     except:
         return None
     finally:

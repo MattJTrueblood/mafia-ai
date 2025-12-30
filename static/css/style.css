@@ -330,6 +330,22 @@ button {
     color: #e0e0e0;
 }
 
+/* Turn type icons for discussion messages */
+.turn-icon {
+    display: inline-block;
+    margin-right: 4px;
+    font-size: 0.9em;
+    vertical-align: middle;
+}
+
+.turn-icon.interrupt {
+    color: #f1c40f; /* Yellow/gold for urgency */
+}
+
+.turn-icon.respond {
+    color: #3498db; /* Blue for response */
+}
+
 /* Priority badges */
 .priority-badge {
     display: inline-block;

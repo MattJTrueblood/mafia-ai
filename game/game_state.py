@@ -243,7 +243,8 @@ class GameState:
             "discussion_messages": [],
             "speaker_order": [p.name for p in alive],
             "current_speaker_index": 0,
-            "consecutive_no_interrupt_rounds": 0,
+            "player_last_message_index": {},  # Maps player_name -> message index for recency selection
+            "last_was_respond": False,  # Tracks if last message was a respond (to block respond chains)
             "votes": [],
         }
 

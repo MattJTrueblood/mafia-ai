@@ -10,7 +10,7 @@ from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from llm.prompts import (
     build_night_prompt,
     build_day_discussion_prompt,
-    build_interrupt_check_prompt,
+    build_turn_poll_prompt,
     build_day_voting_prompt,
     build_mafia_vote_prompt,
 )
@@ -40,12 +40,14 @@ ACTION_SCHEMA = {
     "required": ["target", "reasoning"]
 }
 
-INTERRUPT_SCHEMA = {
+TURN_POLL_SCHEMA = {
     "type": "object",
     "properties": {
-        "wants_to_interrupt": {"type": "boolean"}
+        "wants_to_interrupt": {"type": "boolean"},
+        "wants_to_respond": {"type": "boolean"},
+        "wants_to_pass": {"type": "boolean"}
     },
-    "required": ["wants_to_interrupt"]
+    "required": ["wants_to_interrupt", "wants_to_respond", "wants_to_pass"]
 }
 
 
@@ -578,14 +580,19 @@ def handle_day_phase(
                 status.update(extra)
             emit_status_callback(game_id, status)
 
-    # Helper function to poll for interrupts
-    def poll_for_interrupts(exclude_player: str = None) -> list:
-        """Poll all players to see who wants to interrupt. Returns list of player names.
+    # Helper function to poll for turn actions (interrupt/respond/pass)
+    def poll_for_turn_actions(exclude_player: str = None) -> tuple:
+        """Poll all players to see who wants to interrupt, respond, or pass.
+
+        Returns:
+            tuple: (interrupting_players, responding_players, passing_players)
 
         Raises:
             LLMCancelledException: If cancelled during polling
         """
         interrupting_players = []
+        responding_players = []
+        passing_players = []
         players_waiting = []
 
         for player in alive_players:
@@ -593,42 +600,46 @@ def handle_day_phase(
                 continue
             players_waiting.append(player.name)
 
-        # Emit status showing we're polling for interrupts
-        emit_status("interrupt_polling", extra={"players_being_polled": players_waiting})
+        # Emit status showing we're polling for turn actions
+        emit_status("turn_polling", extra={"players_being_polled": players_waiting})
 
         for player in alive_players:
             if player.name == exclude_player:
                 continue
 
-            prompt = build_interrupt_check_prompt(game_state, player)
+            prompt = build_turn_poll_prompt(game_state, player)
             messages = [{"role": "user", "content": prompt}]
 
             try:
                 # Emit waiting status for this player
-                emit_status("waiting_interrupt", waiting_player=player.name,
+                emit_status("waiting_turn_poll", waiting_player=player.name,
                            extra={"interrupting_players": interrupting_players})
 
                 player.last_llm_context = {
                     "messages": messages,
                     "timestamp": datetime.now().isoformat(),
-                    "action_type": "interrupt_check",
+                    "action_type": "turn_poll",
                     "phase": game_state.phase,
                     "day": game_state.day_number
                 }
                 response = llm_client.call_model(
                     player.model,
                     messages,
-                    response_format={"type": "json_schema", "json_schema": {"name": "interrupt", "schema": INTERRUPT_SCHEMA}},
+                    response_format={"type": "json_schema", "json_schema": {"name": "turn_poll", "schema": TURN_POLL_SCHEMA}},
                     temperature=0.3,
-                    max_tokens=50,
+                    max_tokens=100,
                     cancel_event=get_cancel_event()
                 )
                 player.last_llm_context["response"] = response
 
                 wants_to_interrupt = False
+                wants_to_respond = False
+                wants_to_pass = False
 
                 if "structured_output" in response:
                     wants_to_interrupt = response["structured_output"].get("wants_to_interrupt", False)
+                    wants_to_respond = response["structured_output"].get("wants_to_respond", False)
+                    wants_to_pass = response["structured_output"].get("wants_to_pass", False)
                 else:
                     try:
                         content = response.get("content", "")
@@ -637,25 +648,32 @@ def handle_day_phase(
                         if json_start >= 0:
                             parsed = json.loads(content[json_start:json_end])
                             wants_to_interrupt = parsed.get("wants_to_interrupt", False)
+                            wants_to_respond = parsed.get("wants_to_respond", False)
+                            wants_to_pass = parsed.get("wants_to_pass", False)
                     except:
-                        # If we can't parse, assume no interrupt
+                        # If we can't parse, assume no action
                         pass
 
                 if wants_to_interrupt:
                     interrupting_players.append(player.name)
-                    # Emit updated status showing this player wants to interrupt
-                    emit_status("waiting_interrupt", waiting_player=player.name,
-                               extra={"interrupting_players": interrupting_players})
+                elif wants_to_respond:
+                    responding_players.append(player.name)
+                if wants_to_pass:
+                    passing_players.append(player.name)
+
+                # Emit updated status
+                emit_status("waiting_turn_poll", waiting_player=player.name,
+                           extra={"interrupting_players": interrupting_players, "responding_players": responding_players})
             except LLMCancelledException:
                 raise  # Re-raise cancellation
             except Exception as e:
-                # On error, assume no interrupt - don't hold up the game
+                # On error, assume no action - don't hold up the game
                 continue
 
-        return interrupting_players
+        return interrupting_players, responding_players, passing_players
 
     # Helper function to get a message from a player (no structured output required)
-    def get_player_message(player: "Player", is_interrupt: bool = False) -> tuple:
+    def get_player_message(player: "Player", is_interrupt: bool = False, is_respond: bool = False) -> tuple:
         """Get a discussion message from a player.
 
         Returns:
@@ -664,7 +682,7 @@ def handle_day_phase(
         Raises:
             LLMCancelledException: If cancelled during message generation
         """
-        prompt = build_day_discussion_prompt(game_state, player, is_interrupt=is_interrupt)
+        prompt = build_day_discussion_prompt(game_state, player, is_interrupt=is_interrupt, is_respond=is_respond)
         messages = [{"role": "user", "content": prompt}]
 
         try:
@@ -754,27 +772,26 @@ def handle_day_phase(
         })
 
         try:
-            interrupting_players = poll_for_interrupts(exclude_player=current_speaker.name)
+            interrupting_players, responding_players, passing_players = poll_for_turn_actions(exclude_player=current_speaker.name)
         except LLMCancelledException:
-            restore_and_raise("Cancelled during interrupt polling")
+            restore_and_raise("Cancelled during turn polling")
 
-        # Phase 2: Determine who speaks
+        # Phase 2: Determine who speaks (interrupt > respond > regular)
+        is_interrupt = False
+        is_respond = False
         if interrupting_players:
             # Random selection among those who want to interrupt
             selected_speaker_name = random.choice(interrupting_players)
             selected_speaker = next((p for p in alive_players if p.name == selected_speaker_name), None)
             is_interrupt = True
-            consecutive_no_interrupt_rounds = 0
+        elif responding_players:
+            # Random selection among those who want to respond
+            selected_speaker_name = random.choice(responding_players)
+            selected_speaker = next((p for p in alive_players if p.name == selected_speaker_name), None)
+            is_respond = True
         else:
-            # No interrupts - current speaker goes
+            # No interrupts/responds - current speaker goes
             selected_speaker = current_speaker
-            is_interrupt = False
-            consecutive_no_interrupt_rounds += 1
-
-            # Check if we should end discussion (no one has anything urgent to say)
-            if consecutive_no_interrupt_rounds >= max_no_interrupt_rounds and len(discussion_messages) >= len(alive_players):
-                # Everyone has had at least one turn and no one is interrupting
-                break
 
         if not selected_speaker:
             current_speaker_index += 1
@@ -782,12 +799,13 @@ def handle_day_phase(
 
         # Phase 3: Get the message from the selected speaker
         emit_status("waiting_message", waiting_player=selected_speaker.name,
-                   extra={"is_interrupt": is_interrupt})
+                   extra={"is_interrupt": is_interrupt, "is_respond": is_respond})
 
         # Checkpoint before getting message
         make_checkpoint("discussion_message", {
             "speaker": selected_speaker.name,
             "is_interrupt": is_interrupt,
+            "is_respond": is_respond,
             "speaker_index": current_speaker_index,
             "messages_count": len(discussion_messages),
             "discussion_messages": list(discussion_messages),
@@ -796,40 +814,58 @@ def handle_day_phase(
         })
 
         try:
-            message, failure_reason = get_player_message(selected_speaker, is_interrupt=is_interrupt)
+            message, failure_reason = get_player_message(selected_speaker, is_interrupt=is_interrupt, is_respond=is_respond)
         except LLMCancelledException:
             restore_and_raise("Cancelled during discussion message")
 
         if message:
+            # Determine turn type for UI display
+            if is_interrupt:
+                turn_type = "interrupt"
+            elif is_respond:
+                turn_type = "respond"
+            else:
+                turn_type = "regular"
+
             # Add the message to discussion
-            game_state.add_event("discussion", message, "public", player=selected_speaker.name)
+            game_state.add_event("discussion", message, "public", player=selected_speaker.name,
+                                metadata={"turn_type": turn_type})
             discussion_messages.append({
                 "player": selected_speaker.name,
                 "message": message,
-                "is_interrupt": is_interrupt
+                "is_interrupt": is_interrupt,
+                "is_respond": is_respond
             })
             day_results["discussion"].append({
                 "player": selected_speaker.name,
                 "message": message,
-                "is_interrupt": is_interrupt
+                "is_interrupt": is_interrupt,
+                "is_respond": is_respond
             })
+
+            # Move speaker to back of round-robin queue
+            if selected_speaker in round_robin_order:
+                round_robin_order.remove(selected_speaker)
+                round_robin_order.append(selected_speaker)
+                current_speaker_index = 0  # Reset index since order changed
 
             # Emit real-time update after each message
             if emit_callback and game_id:
                 emit_callback(game_id, game_state)
         else:
             # Player failed to produce a message - add visible event
-            turn_type = "interrupt" if is_interrupt else "turn"
+            if is_interrupt:
+                turn_type = "interrupt"
+            elif is_respond:
+                turn_type = "response"
+            else:
+                turn_type = "turn"
             failure_msg = f"[{selected_speaker.name}'s {turn_type} produced no message: {failure_reason}]"
             game_state.add_event("system", failure_msg, "all", player=selected_speaker.name)
 
             # Still emit update so the failure is visible
             if emit_callback and game_id:
                 emit_callback(game_id, game_state)
-
-        # Advance round-robin only if we used the scheduled speaker (not an interrupt)
-        if not is_interrupt:
-            current_speaker_index += 1
 
     emit_status("discussion_end")
     game_state.add_event("system", "Discussion phase ends.", "all")

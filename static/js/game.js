@@ -428,9 +428,19 @@ function createEventElement(event, playerMap) {
         const nameClass = getPlayerNameClass(playerInfo);
         const roleDisplay = playerInfo.role || 'Unknown';
 
+        // Turn type icon for discussion messages
+        let turnIcon = '';
+        if (event.type === 'discussion' && event.metadata && event.metadata.turn_type) {
+            if (event.metadata.turn_type === 'interrupt') {
+                turnIcon = '<span class="turn-icon interrupt" title="Interrupt">⚡</span>';
+            } else if (event.metadata.turn_type === 'respond') {
+                turnIcon = '<span class="turn-icon respond" title="Response">↩️</span>';
+            }
+        }
+
         content = `${phaseLabel}`;
         if (event.player) {
-            content += `<span class="${nameClass}">${escapeHtml(event.player)} (${escapeHtml(roleDisplay)}):</span>`;
+            content += `${turnIcon}<span class="${nameClass}">${escapeHtml(event.player)} (${escapeHtml(roleDisplay)}):</span>`;
         }
         content += `<span class="event-message">${escapeHtml(event.message)}</span>`;
 

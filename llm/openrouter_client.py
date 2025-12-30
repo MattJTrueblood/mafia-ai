@@ -108,8 +108,23 @@ class OpenRouterClient:
 
                 data = response.json()
 
+                # Debug: Check for API-level errors or empty responses
+                if "error" in data:
+                    print(f"[OpenRouter API Error] {data['error']}")
+                    raise Exception(f"OpenRouter API error: {data['error']}")
+
+                if not data.get("choices"):
+                    print(f"[OpenRouter] No choices in response: {data}")
+                    raise Exception("OpenRouter returned no choices")
+
                 # Extract message object
                 message = data["choices"][0]["message"]
+
+                # Debug: Log if content is empty with structured output request
+                if response_format and not message.get("content"):
+                    print(f"[OpenRouter] Empty content with response_format. Model: {model}")
+                    print(f"[OpenRouter] Message keys: {list(message.keys())}")
+                    print(f"[OpenRouter] Full message: {message}")
 
                 # Extract content
                 content = message.get("content") or ""
