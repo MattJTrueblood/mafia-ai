@@ -1,11 +1,11 @@
 """OpenRouter API client for LLM interactions."""
 
 import json
+import logging
 import time
 import requests
 from typing import Dict, List, Optional, Any
 from config import load_openrouter_key
-from game.error_logger import log_empty_result, log_json_parse_failure
 
 
 class LLMCancelledException(Exception):
@@ -125,28 +125,17 @@ class OpenRouterClient:
                 content = message.get("content") or ""
 
                 # CRITICAL DIAGNOSTIC: Log EVERY response to verify logging is working
-                from game.error_logger import log_warning
                 content_repr = repr(content)[:100]  # First 100 chars of repr
-                log_warning(
+                logging.warning(
                     f"OpenRouter response received: content={content_repr}, "
                     f"has_content={bool(content)}, "
                     f"content_length={len(content)}, "
-                    f"message_keys={list(message.keys())}",
-                    extra_context={"model": model}
+                    f"message_keys={list(message.keys())}, model={model}"
                 )
 
                 # CRITICAL: Log ALL empty responses (this is the most common silent failure)
                 if not content:
-                    log_empty_result(
-                        component="openrouter_api_response",
-                        extra_context={
-                            "model": model,
-                            "message_keys": list(message.keys()),
-                            "response_format": str(response_format) if response_format else "None",
-                            "has_structured_output": "structured_output" in message or "structured_outputs" in message,
-                            "full_message": str(message)[:500]  # First 500 chars of message
-                        }
-                    )
+                    logging.warning(f"Empty result from openrouter_api_response for model {model}")
 
                 result = {
                     "content": content,
@@ -188,12 +177,7 @@ class OpenRouterClient:
                             json_str = content[json_start:json_end]
                             result["structured_output"] = json.loads(json_str)
                     except (json.JSONDecodeError, ValueError) as e:
-                        log_json_parse_failure(
-                            content=content[json_start:json_end] if json_start >= 0 else content,
-                            exception=e,
-                            extra_context={"model": model, "attempting_fallback_parse": True},
-                            fallback_used=None
-                        )
+                        logging.error(f"JSON parse failed for model {model}: {e}")
 
                 return result
 

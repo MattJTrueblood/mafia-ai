@@ -12,40 +12,28 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from game.game_state import GameState
 from game.step_processor import process_step
 from llm.openrouter_client import OpenRouterClient, LLMCancelledException
-from game.error_logger import initialize_logging, set_game_context, clear_game_context, log_exception
+from game.error_logger import initialize_logging
 import config
 import logging
 import sys
 from gevent.hub import Hub
 
-# =============================================================================
-# UNIFIED EXCEPTION LOGGING - Catches ALL exceptions automatically
-# =============================================================================
+# Wrap exception handlers to log uncaught exceptions to file
+_original_hub_error = Hub.handle_error
+_original_excepthook = sys.excepthook
 
-_original_hub_handle_error = Hub.handle_error
-_original_sys_excepthook = sys.excepthook
+def log_greenlet_exception(self, context, type, value, tb):
+    """Log uncaught greenlet exceptions."""
+    logging.exception(f"Greenlet exception in {context}")
+    _original_hub_error(self, context, type, value, tb)
 
-def unified_greenlet_exception_handler(self, context, type, value, tb):
-    """
-    Unified exception handler for ALL gevent greenlets.
-    This catches EVERY exception in EVERY greenlet before any other handler.
-    """
-    log_exception(value, f"Greenlet exception in {context}")
-    # Call original handler to maintain gevent's behavior
-    _original_hub_handle_error(self, context, type, value, tb)
+def log_thread_exception(exc_type, exc_value, exc_traceback):
+    """Log uncaught main thread exceptions."""
+    logging.exception("Uncaught exception in main thread")
+    _original_excepthook(exc_type, exc_value, exc_traceback)
 
-def unified_thread_exception_handler(exc_type, exc_value, exc_traceback):
-    """
-    Unified exception handler for main thread uncaught exceptions.
-    """
-    log_exception(exc_value, "Uncaught exception in main thread")
-    # Call original handler to maintain normal behavior
-    _original_sys_excepthook(exc_type, exc_value, exc_traceback)
-
-Hub.handle_error = unified_greenlet_exception_handler
-sys.excepthook = unified_thread_exception_handler
-
-# =============================================================================
+Hub.handle_error = log_greenlet_exception
+sys.excepthook = log_thread_exception
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
@@ -130,15 +118,8 @@ def game_loop(game_id: str):
     control = game_controls[game_id]
     control.is_running = True
 
-    set_game_context(game_id=game_id)
-
     try:
         while not game_state.game_over:
-            set_game_context(
-                phase=game_state.phase,
-                day_number=game_state.day_number,
-                current_step=game_state.current_step
-            )
 
             while control.pause_event.is_set():
                 gevent.sleep(0.1)  # Cooperative yield
@@ -166,10 +147,7 @@ def game_loop(game_id: str):
                 socketio.emit('pause_state', {'paused': True}, room=game_id)
                 continue
             except Exception as e:
-                log_exception(e, "Error in game loop", extra_context={
-                    "game_over": game_state.game_over,
-                    "step_index": game_state.step_index
-                })
+                logging.exception(f"Error in game loop - game_over={game_state.game_over}, step_index={game_state.step_index}")
                 game_state.add_event("system", f"Error: {str(e)}", "all")
                 emit_game_state_update(game_id, game_state)
                 # Pause on error so user can investigate
@@ -177,7 +155,6 @@ def game_loop(game_id: str):
                 socketio.emit('pause_state', {'paused': True}, room=game_id)
 
     finally:
-        clear_game_context()
         control.is_running = False
 
 
