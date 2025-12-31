@@ -12,7 +12,42 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from game.game_state import GameState
 from game.step_processor import process_step
 from llm.openrouter_client import OpenRouterClient, LLMCancelledException
+from game.error_logger import initialize_logging, set_game_context, clear_game_context, log_exception
 import config
+import logging
+import sys
+from gevent.hub import Hub
+
+# =============================================================================
+# UNIFIED EXCEPTION LOGGING - Catches ALL exceptions automatically
+# =============================================================================
+
+# Store original handlers
+_original_hub_handle_error = Hub.handle_error
+_original_sys_excepthook = sys.excepthook
+
+def unified_greenlet_exception_handler(self, context, type, value, tb):
+    """
+    Unified exception handler for ALL gevent greenlets.
+    This catches EVERY exception in EVERY greenlet before any other handler.
+    """
+    log_exception(value, f"Greenlet exception in {context}")
+    # Call original handler to maintain gevent's behavior
+    _original_hub_handle_error(self, context, type, value, tb)
+
+def unified_thread_exception_handler(exc_type, exc_value, exc_traceback):
+    """
+    Unified exception handler for main thread uncaught exceptions.
+    """
+    log_exception(exc_value, "Uncaught exception in main thread")
+    # Call original handler to maintain normal behavior
+    _original_sys_excepthook(exc_type, exc_value, exc_traceback)
+
+# Install unified exception handlers
+Hub.handle_error = unified_greenlet_exception_handler
+sys.excepthook = unified_thread_exception_handler
+
+# =============================================================================
 
 app = Flask(__name__)
 app.secret_key = "mafia-ai-secret-key"  # Change in production
@@ -38,6 +73,9 @@ game_controls = {}
 
 # Initialize LLM client
 llm_client = OpenRouterClient()
+
+# Initialize error logging system
+initialize_logging(log_dir="logs", log_level=logging.INFO)
 
 
 def emit_game_state_update(game_id, game_state):
@@ -79,8 +117,18 @@ def game_loop(game_id: str):
     control = game_controls[game_id]
     control.is_running = True
 
+    # Set game context for this greenlet
+    set_game_context(game_id=game_id)
+
     try:
         while not game_state.game_over:
+            # Update context with current game state
+            set_game_context(
+                phase=game_state.phase,
+                day_number=game_state.day_number,
+                current_step=game_state.current_step
+            )
+
             # Wait while paused
             while control.pause_event.is_set():
                 gevent.sleep(0.1)  # Cooperative yield
@@ -110,7 +158,11 @@ def game_loop(game_id: str):
                 socketio.emit('pause_state', {'paused': True}, room=game_id)
                 continue
             except Exception as e:
-                # Log error but don't crash the loop
+                # Log error with full traceback and context
+                log_exception(e, "Error in game loop", extra_context={
+                    "game_over": game_state.game_over,
+                    "step_index": game_state.step_index
+                })
                 game_state.add_event("system", f"Error: {str(e)}", "all")
                 emit_game_state_update(game_id, game_state)
                 # Pause on error so user can investigate
@@ -118,6 +170,7 @@ def game_loop(game_id: str):
                 socketio.emit('pause_state', {'paused': True}, room=game_id)
 
     finally:
+        clear_game_context()
         control.is_running = False
 
 

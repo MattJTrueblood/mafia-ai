@@ -5,6 +5,7 @@ import time
 import requests
 from typing import Dict, List, Optional, Any
 from config import load_openrouter_key
+from game.error_logger import log_empty_result, log_json_parse_failure
 
 
 class LLMCancelledException(Exception):
@@ -120,14 +121,32 @@ class OpenRouterClient:
                 # Extract message object
                 message = data["choices"][0]["message"]
 
-                # Debug: Log if content is empty with structured output request
-                if response_format and not message.get("content"):
-                    print(f"[OpenRouter] Empty content with response_format. Model: {model}")
-                    print(f"[OpenRouter] Message keys: {list(message.keys())}")
-                    print(f"[OpenRouter] Full message: {message}")
-
                 # Extract content
                 content = message.get("content") or ""
+
+                # CRITICAL DIAGNOSTIC: Log EVERY response to verify logging is working
+                from game.error_logger import log_warning
+                content_repr = repr(content)[:100]  # First 100 chars of repr
+                log_warning(
+                    f"OpenRouter response received: content={content_repr}, "
+                    f"has_content={bool(content)}, "
+                    f"content_length={len(content)}, "
+                    f"message_keys={list(message.keys())}",
+                    extra_context={"model": model}
+                )
+
+                # CRITICAL: Log ALL empty responses (this is the most common silent failure)
+                if not content:
+                    log_empty_result(
+                        component="openrouter_api_response",
+                        extra_context={
+                            "model": model,
+                            "message_keys": list(message.keys()),
+                            "response_format": str(response_format) if response_format else "None",
+                            "has_structured_output": "structured_output" in message or "structured_outputs" in message,
+                            "full_message": str(message)[:500]  # First 500 chars of message
+                        }
+                    )
 
                 result = {
                     "content": content,
@@ -168,8 +187,13 @@ class OpenRouterClient:
                         if json_start >= 0 and json_end > json_start:
                             json_str = content[json_start:json_end]
                             result["structured_output"] = json.loads(json_str)
-                    except (json.JSONDecodeError, ValueError):
-                        pass
+                    except (json.JSONDecodeError, ValueError) as e:
+                        log_json_parse_failure(
+                            content=content[json_start:json_end] if json_start >= 0 else content,
+                            exception=e,
+                            extra_context={"model": model, "attempting_fallback_parse": True},
+                            fallback_used=None
+                        )
 
                 return result
 

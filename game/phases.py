@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from .game_state import GameState, Player
 from .win_conditions import check_win_conditions
+from .error_logger import log_json_parse_failure
 from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from llm.prompts import (
     build_night_prompt,
@@ -164,8 +165,13 @@ def handle_night_phase(
                         parsed = json.loads(content[json_start:json_end])
                         target = parsed.get("target")
                         reasoning = parsed.get("reasoning", "")
-                except:
-                    pass
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=response.get("content", ""),
+                        exception=e,
+                        player_name=mafia.name,
+                        fallback_used={"target": None, "reasoning": ""}
+                    )
             
             mafia_votes.append({
                 "player": mafia.name,
@@ -246,9 +252,14 @@ def handle_night_phase(
                     parsed = json.loads(content[json_start:json_end])
                     target = parsed.get("target")
                     reasoning = parsed.get("reasoning", "")
-            except:
-                pass
-        
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                log_json_parse_failure(
+                    content=response.get("content", ""),
+                    exception=e,
+                    player_name=doctor.name,
+                    fallback_used={"target": None, "reasoning": ""}
+                )
+
         # Validate: can't protect same person twice in a row
         if target and doctor.role.last_protected == target:
             attempted_target = target
@@ -325,9 +336,14 @@ def handle_night_phase(
                     parsed = json.loads(content[json_start:json_end])
                     target = parsed.get("target")
                     reasoning = parsed.get("reasoning", "")
-            except:
-                pass
-        
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                log_json_parse_failure(
+                    content=response.get("content", ""),
+                    exception=e,
+                    player_name=sheriff.name,
+                    fallback_used={"target": None, "reasoning": ""}
+                )
+
         if target:
             target_player = game_state.get_player_by_name(target)
             if target_player:
@@ -403,9 +419,14 @@ def handle_night_phase(
                         parsed = json.loads(content[json_start:json_end])
                         target = parsed.get("target")
                         reasoning = parsed.get("reasoning", "")
-                except:
-                    pass
-            
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=response.get("content", ""),
+                        exception=e,
+                        player_name=vigilante.name,
+                        fallback_used={"target": None, "reasoning": ""}
+                    )
+
             if target:
                 vigilante.role.bullet_used = True
                 night_results["vigilante_kill"] = {
@@ -650,9 +671,14 @@ def handle_day_phase(
                             wants_to_interrupt = parsed.get("wants_to_interrupt", False)
                             wants_to_respond = parsed.get("wants_to_respond", False)
                             wants_to_pass = parsed.get("wants_to_pass", False)
-                    except:
+                    except (json.JSONDecodeError, KeyError, ValueError) as e:
                         # If we can't parse, assume no action
-                        pass
+                        log_json_parse_failure(
+                            content=response.get("content", ""),
+                            exception=e,
+                            player_name=player.name,
+                            fallback_used={"wants_to_interrupt": False, "wants_to_respond": False, "wants_to_pass": False}
+                        )
 
                 if wants_to_interrupt:
                     interrupting_players.append(player.name)
@@ -719,8 +745,13 @@ def handle_day_phase(
                         if "message" in parsed:
                             message = parsed.get("message", "")
                             extracted_from_json = True
-                except:
-                    pass  # Keep the original message if parsing fails
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=message,
+                        exception=e,
+                        player_name=player.name,
+                        fallback_used=message
+                    )
 
             # Store debug info
             player.last_llm_context["debug"] = {
@@ -921,8 +952,13 @@ def handle_day_phase(
                         parsed = json.loads(content[json_start:json_end])
                         vote_target = parsed.get("vote", "abstain")
                         explanation = parsed.get("explanation", "")
-                except:
-                    pass
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=response.get("content", ""),
+                        exception=e,
+                        player_name=player.name,
+                        fallback_used={"vote": "abstain", "explanation": ""}
+                    )
 
             # Validate vote
             if vote_target != "abstain" and vote_target not in alive_names:

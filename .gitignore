@@ -30,3 +30,6 @@ openrouter_key.txt
 .DS_Store
 Thumbs.db
 openrouter_key.txt
+
+# Logs
+logs/

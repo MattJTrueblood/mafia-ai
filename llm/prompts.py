@@ -529,6 +529,80 @@ Example (nothing to add): {{"wants_to_interrupt": false, "wants_to_respond": fal
     return prompt
 
 
+def build_introduction_prompt(game_state, player: "Player") -> str:
+    """Build prompt for Day 1 introduction messages.
+
+    Args:
+        game_state: Current game state
+        player: The player introducing themselves
+    """
+    context = build_game_context(game_state, viewing_player=player)
+    rules = build_game_rules()
+
+    # Get player's role info
+    if player.role and player.role.name == "Mafia":
+        role_info = f"You are {player.name}, a member of the MAFIA FACTION."
+        mafia_players = game_state.get_players_by_role("Mafia")
+        mafia_names = [p.name for p in mafia_players if p.name != player.name]
+        if mafia_names:
+            role_info += f" Your fellow mafia members are: {', '.join(mafia_names)}."
+        strategic_guidance = build_mafia_strategic_guidance()
+    elif player.role:
+        # Town-aligned roles (Town, Sheriff, Doctor, Vigilante)
+        if player.role.name in ["Sheriff", "Doctor", "Vigilante"]:
+            role_info = f"You are {player.name}, a {player.role.name}. You are a TOWN FACTION member with a special ability."
+        else:
+            role_info = f"You are {player.name}, a {player.role.name}. You are a TOWN FACTION member."
+        strategic_guidance = build_town_strategic_guidance()
+    else:
+        role_info = f"You are {player.name}, a player."
+        strategic_guidance = ""
+
+    # Special warning for Day 1 introductions
+    introduction_guidance = """
+DAY 1 INTRODUCTION GUIDELINES:
+
+This is the very beginning of the game - Day 1, before any night actions have occurred. Each player is introducing themselves to the group. This is a casual, friendly phase where players greet each other and may discuss the game setup.
+
+What to do:
+- Keep your introduction brief - one to two sentences maximum
+- Greet the other players in a friendly, casual manner
+- You may comment on the game setup (number of players, role distribution, etc.)
+- You may express your general feelings about the game starting or mention your playstyle preferences
+- Some players may discuss whether to lynch anyone on Day 1 (most groups choose not to)
+
+What NOT to do:
+- DO NOT reveal your role (even if you're town) - roles are secret
+- DO NOT make specific accusations yet - no one has done anything suspicious
+- DO NOT give away strategic information about your plans
+- Keep it light and casual - save the serious discussion for Day 2
+
+Examples of good Day 1 introductions:
+- "Nice to meet you all. Let's all have a good game."
+- "Hi, good luck everybody and let's have fun."
+- "11 players with 3 mafia, should be a nice balanced game."
+- "So, nobody wants to go for a day 1 lynch?"
+- "I'd rather not roll dice and accidentally mislynch a power role or something."
+- "Let's remember the rules and reconvene tomorrow once we get our first deaths."
+- "Good luck everybody."
+
+Remember: This is just introductions. The real game begins on Day 2 after the first night phase.
+"""
+
+    prompt = f"""{rules}
+{role_info}
+
+{strategic_guidance}
+
+{context}
+
+{introduction_guidance}
+
+Your introduction (keep it brief, 1-2 sentences maximum):"""
+
+    return prompt
+
+
 def build_day_discussion_prompt(game_state, player: "Player", is_interrupt: bool = False, is_respond: bool = False) -> str:
     """Build prompt for day phase discussion.
 

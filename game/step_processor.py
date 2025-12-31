@@ -15,6 +15,10 @@ from typing import Dict, Any, Optional, Callable, List
 
 from .game_state import GameState
 from .win_conditions import check_win_conditions
+from .error_logger import (
+    log_exception, log_empty_result, log_json_parse_failure,
+    log_warning, set_game_context
+)
 from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from llm.prompts import (
     build_night_prompt,
@@ -463,22 +467,88 @@ def process_step(
         alive = game_state.get_alive_players()
         names = ", ".join([p.name for p in alive])
         game_state.add_event("system", f"Remaining players ({len(alive)}): {names}", "all")
-        game_state.add_event("system", f"Day {game_state.day_number} discussion phase begins.", "all")
-        emit_update()
-        emit_status("discussion_start", message_count=0, max_messages=10)
 
-        # Move to discussion polling
-        game_state.current_step = GameState.STEP_DISCUSSION_POLL
-        game_state.step_index = 0
+        # Check if this is the introduction day (Day 1)
+        if game_state.day_number == 1:
+            game_state.add_event("system", "Introduction phase begins. Each player will introduce themselves.", "all")
+            emit_update()
+            emit_status("introduction_start", message_count=0, max_messages=len(alive))
+
+            # Move to introduction messages (simple round-robin)
+            game_state.current_step = GameState.STEP_INTRODUCTION_MESSAGE
+            game_state.step_index = 0
+            return StepResult()
+        else:
+            # Regular discussion day
+            game_state.add_event("system", f"Day {game_state.day_number} discussion phase begins.", "all")
+            emit_update()
+            emit_status("discussion_start", message_count=0, max_messages=10)
+
+            # Move to discussion polling
+            game_state.current_step = GameState.STEP_DISCUSSION_POLL
+            game_state.step_index = 0
+            return StepResult()
+
+    elif step == GameState.STEP_INTRODUCTION_MESSAGE:
+        # Simple round-robin introductions for Day 1
+        speaker_order = game_state.phase_data.get("speaker_order", [])
+        current_idx = game_state.step_index
+
+        if current_idx >= len(speaker_order):
+            # All players have introduced themselves - move to voting
+            game_state.add_event("system", "Introduction phase complete.", "all")
+            emit_update()
+            game_state.current_step = GameState.STEP_VOTING
+            game_state.step_index = 0
+            return StepResult()
+
+        # Get current speaker
+        speaker_name = speaker_order[current_idx]
+        speaker = game_state.get_player_by_name(speaker_name)
+
+        if not speaker or not speaker.alive:
+            # Skip dead/missing player, move to next
+            game_state.step_index += 1
+            return StepResult()
+
+        emit_status("waiting_message", waiting_player=speaker_name, is_interrupt=False, is_respond=False)
+
+        # Get introduction from player
+        introduction = _get_introduction_message(game_state, speaker, llm_client, cancel_event, emit_player_status)
+
+        if introduction:
+            # Add introduction to game log
+            game_state.add_event("discussion", introduction, "public", player=speaker_name,
+                                metadata={"turn_type": "introduction"})
+
+            # Track in phase data for history
+            if "discussion_messages" not in game_state.phase_data:
+                game_state.phase_data["discussion_messages"] = []
+            game_state.phase_data["discussion_messages"].append({
+                "player": speaker_name,
+                "message": introduction,
+                "is_interrupt": False,
+                "is_respond": False
+            })
+
+        emit_update()
+
+        # Move to next player
+        game_state.step_index += 1
         return StepResult()
 
     elif step == GameState.STEP_DISCUSSION_POLL:
+        from game.error_logger import log_info
+
         # Check if discussion should end
         messages = game_state.phase_data.get("discussion_messages", [])
         max_messages = 10
 
+        log_info(f"[POLL] Starting poll round. Messages so far: {len(messages)}/{max_messages}")
+
         if len(messages) >= max_messages:
             # Max messages reached - end discussion
+            log_info(f"[POLL] Max messages reached, moving to voting")
             emit_status("discussion_end")
             game_state.add_event("system", f"Day {game_state.day_number} discussion phase ends.", "all")
             game_state.current_step = GameState.STEP_VOTING
@@ -489,6 +559,8 @@ def process_step(
         # Get current speaker from round-robin
         speaker_order = game_state.phase_data.get("speaker_order", [])
         speaker_idx = game_state.phase_data.get("current_speaker_index", 0)
+
+        log_info(f"[POLL] Speaker order: {speaker_order}, current_speaker_index: {speaker_idx}")
 
         if not speaker_order:
             # No speakers, move to voting
@@ -519,9 +591,12 @@ def process_step(
 
         if not current_speaker:
             # No valid speakers found, move to voting
+            log_info(f"[POLL] No valid speaker found, moving to voting")
             game_state.current_step = GameState.STEP_VOTING
             game_state.step_index = 0
             return StepResult()
+
+        log_info(f"[POLL] Current speaker: {current_speaker_name}, last_speaker: {last_speaker}")
 
         # Check if last message was a respond - if so, block further responds
         # This prevents infinite respond chains
@@ -529,20 +604,26 @@ def process_step(
 
         # Poll for interrupts, responds, and passes (exclude only the last speaker)
         emit_status("turn_polling", waiting_player=None)
+        log_info(f"[POLL] About to poll players (excluding last_speaker: {last_speaker})")
         interrupting, responding, passing = _poll_for_turn_actions(
             game_state, last_speaker, llm_client, cancel_event, emit_status, emit_player_status
         )
 
+        log_info(f"[POLL] Poll results: interrupting={interrupting}, responding={responding}, passing={passing}")
+
         # If last message was a respond, ignore all respond requests (only allow interrupts)
         if last_was_respond:
+            log_info(f"[POLL] Last message was respond, blocking further responds")
             responding = []
 
         # Track players who passed this round
         round_passes = game_state.phase_data.get("round_passes", [])
+        log_info(f"[POLL] round_passes BEFORE update: {round_passes}")
         for passer in passing:
             if passer not in round_passes:
                 round_passes.append(passer)
         game_state.phase_data["round_passes"] = round_passes
+        log_info(f"[POLL] round_passes AFTER update: {round_passes}")
 
         # Emit status with polling results
         emit_status("turn_poll_result",
@@ -551,47 +632,79 @@ def process_step(
             passing_players=round_passes)
 
         if interrupting:
+            log_info(f"[POLL] DECISION: Someone interrupted -> moving to MESSAGE")
             # Someone wants to interrupt - pick whoever spoke least recently
             interrupter_name = _select_speaker_by_recency(interrupting, game_state)
             game_state.phase_data["next_speaker"] = interrupter_name
             game_state.phase_data["is_interrupt"] = True
             game_state.phase_data["is_respond"] = False
         elif responding:
+            log_info(f"[POLL] DECISION: Someone responded -> moving to MESSAGE")
             # Someone wants to respond - pick whoever spoke least recently
             responder_name = _select_speaker_by_recency(responding, game_state)
             game_state.phase_data["next_speaker"] = responder_name
             game_state.phase_data["is_interrupt"] = False
             game_state.phase_data["is_respond"] = True
         else:
-            # Check if current speaker passed
-            if current_speaker_name in round_passes:
-                # Current speaker passed - advance to next speaker
-                game_state.phase_data["current_speaker_index"] = speaker_idx + 1
-                # Don't set next_speaker, just loop back to poll
-                return StepResult()
+            # No interrupts or responds - find first speaker who didn't pass
+            log_info(f"[POLL] No interrupts/responds. Finding first speaker who didn't pass.")
+            log_info(f"[POLL] Speaker order: {speaker_order}, round_passes: {round_passes}")
 
-            # No interrupts/responds and speaker didn't pass - current speaker goes
-            game_state.phase_data["next_speaker"] = current_speaker_name
+            # Search through speaker order starting from current position
+            chosen_speaker = None
+            search_attempts = 0
+            search_idx = speaker_idx
+
+            while search_attempts < len(speaker_order):
+                candidate_name = speaker_order[search_idx % len(speaker_order)]
+                candidate = game_state.get_player_by_name(candidate_name)
+
+                # Check if candidate is alive and didn't pass
+                if candidate and candidate.alive and candidate_name != last_speaker:
+                    if candidate_name not in round_passes:
+                        # Found someone who didn't pass
+                        chosen_speaker = candidate_name
+                        game_state.phase_data["current_speaker_index"] = search_idx
+                        log_info(f"[POLL] Found speaker who didn't pass: {chosen_speaker} at index {search_idx}")
+                        break
+
+                search_idx += 1
+                search_attempts += 1
+
+            # If everyone passed, force the current speaker to speak anyway
+            if not chosen_speaker:
+                chosen_speaker = current_speaker_name
+                log_info(f"[POLL] Everyone passed! Forcing current speaker {chosen_speaker} to speak anyway")
+
+            game_state.phase_data["next_speaker"] = chosen_speaker
             game_state.phase_data["is_interrupt"] = False
             game_state.phase_data["is_respond"] = False
+            log_info(f"[POLL] DECISION: {chosen_speaker} will speak -> moving to MESSAGE")
 
         # Move to getting the message
+        log_info(f"[POLL] Moving to DISCUSSION_MESSAGE step for speaker: {game_state.phase_data.get('next_speaker')}")
         game_state.current_step = GameState.STEP_DISCUSSION_MESSAGE
         game_state.step_index = len(messages)
         return StepResult()
 
     elif step == GameState.STEP_DISCUSSION_MESSAGE:
+        from game.error_logger import log_info
+
         speaker_name = game_state.phase_data.get("next_speaker")
         is_interrupt = game_state.phase_data.get("is_interrupt", False)
         is_respond = game_state.phase_data.get("is_respond", False)
 
+        log_info(f"[MESSAGE] Getting message from {speaker_name} (interrupt={is_interrupt}, respond={is_respond})")
+
         if not speaker_name:
             # No speaker, go back to polling
+            log_info(f"[MESSAGE] No speaker set, returning to poll")
             game_state.current_step = GameState.STEP_DISCUSSION_POLL
             return StepResult()
 
         speaker = game_state.get_player_by_name(speaker_name)
         if not speaker or not speaker.alive:
+            log_info(f"[MESSAGE] Speaker not found or dead, returning to poll")
             game_state.current_step = GameState.STEP_DISCUSSION_POLL
             return StepResult()
 
@@ -600,6 +713,7 @@ def process_step(
         message = _get_discussion_message(game_state, speaker, is_interrupt, is_respond, llm_client, cancel_event, emit_player_status)
 
         if message:
+            log_info(f"[MESSAGE] Got message from {speaker_name}: {message[:50]}...")
             # Track message index for recency-based speaker selection
             msg_index = len(game_state.phase_data["discussion_messages"])
             game_state.phase_data["player_last_message_index"][speaker_name] = msg_index
@@ -624,6 +738,9 @@ def process_step(
             game_state.phase_data["last_speaker"] = speaker_name
             # Track if last message was a respond (to block respond chains)
             game_state.phase_data["last_was_respond"] = is_respond
+            # Clear round passes after successful message (prevents accumulation)
+            log_info(f"[MESSAGE] Clearing round_passes (was: {game_state.phase_data.get('round_passes', [])})")
+            game_state.phase_data["round_passes"] = []
 
             # Move speaker to back of round-robin queue (for all message types)
             speaker_order = game_state.phase_data.get("speaker_order", [])
@@ -637,6 +754,7 @@ def process_step(
         emit_update()
 
         # Go back to polling
+        log_info(f"[MESSAGE] Message complete, returning to DISCUSSION_POLL")
         game_state.current_step = GameState.STEP_DISCUSSION_POLL
         game_state.step_index = 0
         return StepResult()
@@ -683,8 +801,13 @@ def process_step(
                         parsed = json.loads(content[idx:content.rfind("}")+1])
                         vote_target = parsed.get("vote", "abstain")
                         explanation = parsed.get("explanation", "")
-                except:
-                    pass
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=response.get("content", ""),
+                        exception=e,
+                        player_name=player.name,
+                        fallback_used={"vote": "abstain", "explanation": ""}
+                    )
 
             # Validate vote
             if vote_target != "abstain" and vote_target not in alive_names:
@@ -828,8 +951,13 @@ def process_step(
                             parsed = json.loads(content[idx:content.rfind("}")+1])
                             target = parsed.get("target")
                             reason = parsed.get("reason", "")
-                    except:
-                        pass
+                    except (json.JSONDecodeError, KeyError, ValueError) as e:
+                        log_json_parse_failure(
+                            content=response.get("content", ""),
+                            exception=e,
+                            player_name=player.name,
+                            fallback_used={"target": None, "reason": ""}
+                        )
 
                 # Validate: can't vote for self, must be valid player
                 if target == player.name or (target and target not in all_names):
@@ -1195,9 +1323,21 @@ def _poll_for_turn_actions(
 
             # Check for empty response - log warning but continue
             content = response.get("content", "")
-            if not content and "structured_output" not in response:
-                print(f"[TurnPoll] WARNING: Empty response from {player.name} ({player.model})")
+            # CRITICAL: Log if content is empty, regardless of structured_output
+            if not content:
+                log_empty_result(
+                    component="turn_poll",
+                    player_name=player.name,
+                    extra_context={
+                        "model": player.model,
+                        "has_structured_output": "structured_output" in response
+                    }
+                )
+
+            # Parse response based on what's available
+            if "structured_output" not in response and not content:
                 # Treat as "wait for turn" - all False
+                pass  # Variables already initialized to False above
             elif "structured_output" in response:
                 wants_interrupt = response["structured_output"].get("wants_to_interrupt", False)
                 wants_respond = response["structured_output"].get("wants_to_respond", False)
@@ -1210,8 +1350,13 @@ def _poll_for_turn_actions(
                         wants_interrupt = parsed.get("wants_to_interrupt", False)
                         wants_respond = parsed.get("wants_to_respond", False)
                         wants_pass = parsed.get("wants_to_pass", False)
-                except:
-                    print(f"[TurnPoll] WARNING: Failed to parse JSON from {player.name}: {content[:100]}")
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    log_json_parse_failure(
+                        content=content,
+                        exception=e,
+                        player_name=player.name,
+                        fallback_used={"wants_to_interrupt": False, "wants_to_respond": False, "wants_to_pass": False}
+                    )
 
             result = {
                 "player": player.name,
@@ -1268,6 +1413,57 @@ def _poll_for_turn_actions(
     return interrupting, responding, passing
 
 
+def _get_introduction_message(
+    game_state: GameState,
+    player,
+    llm_client: OpenRouterClient,
+    cancel_event,
+    emit_player_status = None
+) -> Optional[str]:
+    """Get an introduction message from a player on Day 1."""
+    from llm.prompts import build_introduction_prompt
+
+    prompt = build_introduction_prompt(game_state, player)
+    messages = [{"role": "user", "content": prompt}]
+
+    # Emit pending status
+    if emit_player_status:
+        emit_player_status(player.name, "pending")
+
+    try:
+        player.last_llm_context = {
+            "messages": messages,
+            "timestamp": datetime.now().isoformat(),
+            "action_type": "introduction_message",
+            "phase": game_state.phase,
+            "day": game_state.day_number
+        }
+
+        response = llm_client.call_model(
+            player.model, messages,
+            temperature=0.9,
+            max_tokens=100,
+            cancel_event=cancel_event
+        )
+        player.last_llm_context["response"] = response
+
+        content = response.get("content", "").strip()
+        return content if content else None
+
+    except LLMCancelledException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[Introduction] EXCEPTION for {player.name}: {e}")
+        traceback.print_exc()
+        player.last_llm_context["error"] = str(e)
+        return None
+    finally:
+        # Emit complete status
+        if emit_player_status:
+            emit_player_status(player.name, "complete")
+
+
 def _get_discussion_message(
     game_state: GameState,
     player,
@@ -1317,8 +1513,13 @@ def _get_discussion_message(
             try:
                 parsed = json.loads(content)
                 content = parsed.get("message", content)
-            except:
-                pass
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                log_json_parse_failure(
+                    content=content,
+                    exception=e,
+                    player_name=player.name,
+                    fallback_used=content
+                )
 
         # Strip surrounding quotes if present
         content = _strip_quotes(content)
@@ -1375,8 +1576,13 @@ def _execute_day_vote(
                     parsed = json.loads(content[idx:content.rfind("}")+1])
                     vote_target = parsed.get("vote", "abstain")
                     explanation = parsed.get("explanation", "")
-            except:
-                pass
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                log_json_parse_failure(
+                    content=response.get("content", ""),
+                    exception=e,
+                    player_name=player.name,
+                    fallback_used={"vote": "abstain", "explanation": ""}
+                )
 
         # Validate vote
         alive_names = [p.name for p in game_state.get_alive_players()]
@@ -1534,8 +1740,12 @@ def _parse_action_response(response: Dict) -> tuple:
                 parsed = json.loads(content[idx:content.rfind("}")+1])
                 target = parsed.get("target")
                 reasoning = parsed.get("reasoning", "")
-        except:
-            pass
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            log_json_parse_failure(
+                content=response.get("content", ""),
+                exception=e,
+                fallback_used={"target": None, "reasoning": ""}
+            )
 
     return target, reasoning
 
@@ -1553,8 +1763,12 @@ def _parse_target_response(response: Dict) -> str:
             if idx >= 0:
                 parsed = json.loads(content[idx:content.rfind("}")+1])
                 target = parsed.get("target")
-        except:
-            pass
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            log_json_parse_failure(
+                content=response.get("content", ""),
+                exception=e,
+                fallback_used={"target": None}
+            )
 
     return target
 
@@ -1774,7 +1988,8 @@ def _execute_sheriff_post_investigation(
         # Strip surrounding quotes if present
         content = _strip_quotes(content)
         return content[:800] if content else None
-    except:
+    except Exception as e:
+        log_exception(e, "Sheriff post-investigation failed", player_name=sheriff.name)
         return None
     finally:
         # Emit complete status
@@ -1817,7 +2032,8 @@ def _execute_postgame_discussion(
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
         return content[:500] if content else None
-    except:
+    except Exception as e:
+        log_exception(e, "Postgame discussion failed", player_name=player.name)
         return None
     finally:
         # Emit complete status
@@ -1866,8 +2082,13 @@ def _execute_mvp_vote(
                     parsed = json.loads(content[idx:content.rfind("}")+1])
                     target = parsed.get("target")
                     reason = parsed.get("reason", "")
-            except:
-                pass
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                log_json_parse_failure(
+                    content=response.get("content", ""),
+                    exception=e,
+                    player_name=player.name,
+                    fallback_used={"target": None, "reason": ""}
+                )
 
         # Validate: can't vote for self
         if target == player.name:
@@ -1886,7 +2107,8 @@ def _execute_mvp_vote(
 
         return {"player": player.name, "target": target, "reason": reason}
 
-    except:
+    except Exception as e:
+        log_exception(e, "MVP vote failed, using random fallback", player_name=player.name)
         others = [p.name for p in game_state.players if p.name != player.name]
         target = random.choice(others) if others else None
         return {"player": player.name, "target": target, "reason": "Good game."}

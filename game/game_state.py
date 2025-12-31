@@ -46,6 +46,7 @@ class GameState:
 
     # Step constants for day phase
     STEP_DAY_START = "day_start"
+    STEP_INTRODUCTION_MESSAGE = "introduction_message"  # Day 1 only: simple round-robin introductions
     STEP_DISCUSSION_POLL = "discussion_poll"  # Followed by round: discussion_poll:0
     STEP_DISCUSSION_MESSAGE = "discussion_message"  # discussion_message:player_name
     STEP_VOTING = "voting"  # voting:0, voting:1, etc.
@@ -67,18 +68,18 @@ class GameState:
         """
         self.game_id = str(uuid.uuid4())
         self.players = []
-        self.phase = "night"  # "night" or "day"
-        self.day_number = 0  # 0 for first night, 1 for first day, etc.
+        self.phase = "day"  # Start in day phase for introduction day
+        self.day_number = 1  # Day 1 is introduction day
         self.events = []  # Unified event log with visibility
         self._event_counter = 0  # For unique event IDs
         self.winner = None
         self.game_over = False
 
         # Step-based execution state
-        self.current_step = self.STEP_NIGHT_START  # Current step identifier
+        self.current_step = self.STEP_DAY_START  # Start with introduction day
         self.step_index = 0  # Sub-index within a step type (e.g., which mafia member)
 
-        # Phase-specific accumulated data (reset at phase start)
+        # Phase-specific accumulated data (will be initialized after role distribution)
         self.phase_data = {}
 
         # Create player objects
@@ -111,6 +112,19 @@ class GameState:
 
         role_str = ", ".join(role_parts)
         self.add_event("system", f"Game started with {len(self.players)} players. Roles have been distributed: {role_str}.", "all")
+
+        # Initialize phase_data for introduction day
+        alive = self.get_alive_players()
+        random.shuffle(alive)
+        self.phase_data = {
+            "discussion_messages": [],
+            "speaker_order": [p.name for p in alive],
+            "current_speaker_index": 0,
+            "player_last_message_index": {},
+            "last_was_respond": False,
+            "votes": [],
+            "round_passes": [],
+        }
 
     def distribute_roles_default(self):
         """Distribute roles based on player count with sensible defaults."""
@@ -246,6 +260,7 @@ class GameState:
             "player_last_message_index": {},  # Maps player_name -> message index for recency selection
             "last_was_respond": False,  # Tracks if last message was a respond (to block respond chains)
             "votes": [],
+            "round_passes": [],  # Tracks players who passed in current round - prevents infinite polling
         }
 
     def to_dict(self) -> Dict:
