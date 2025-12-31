@@ -22,7 +22,6 @@ from gevent.hub import Hub
 # UNIFIED EXCEPTION LOGGING - Catches ALL exceptions automatically
 # =============================================================================
 
-# Store original handlers
 _original_hub_handle_error = Hub.handle_error
 _original_sys_excepthook = sys.excepthook
 
@@ -43,17 +42,14 @@ def unified_thread_exception_handler(exc_type, exc_value, exc_traceback):
     # Call original handler to maintain normal behavior
     _original_sys_excepthook(exc_type, exc_value, exc_traceback)
 
-# Install unified exception handlers
 Hub.handle_error = unified_greenlet_exception_handler
 sys.excepthook = unified_thread_exception_handler
 
 # =============================================================================
 
 app = Flask(__name__)
-app.secret_key = "mafia-ai-secret-key"  # Change in production
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
-# In-memory game storage (for MVP)
 games = {}
 
 
@@ -64,17 +60,14 @@ class GameControl:
         self.pause_event = Event()  # Set when game is paused
         self.cancel_event = Event()  # Set to cancel current LLM call
         self.loop_greenlet = None  # The running game loop greenlet
-        self.checkpoint = None  # State before current action (for retry)
         self.is_running = False  # Whether the loop is active
 
 
-# Game control state per game
 game_controls = {}
+game_clients = {}
 
-# Initialize LLM client
 llm_client = OpenRouterClient()
 
-# Initialize error logging system
 initialize_logging(log_dir="logs", log_level=logging.INFO)
 
 
@@ -102,6 +95,26 @@ def emit_player_status(game_id, player_name, status):
     socketio.emit('player_status', {'player': player_name, 'status': status}, room=game_id)
 
 
+def cleanup_game(game_id):
+    """Clean up a game completely - stop loop, delete all state."""
+    if game_id not in games:
+        return
+
+    if game_id in game_controls:
+        control = game_controls[game_id]
+        if control.loop_greenlet and not control.loop_greenlet.dead:
+            control.pause_event.set()
+            control.cancel_event.set()
+            control.loop_greenlet.kill()
+        del game_controls[game_id]
+
+    if game_id in games:
+        del games[game_id]
+
+    if game_id in game_clients:
+        del game_clients[game_id]
+
+
 def game_loop(game_id: str):
     """
     Main game loop running as a greenlet.
@@ -117,27 +130,22 @@ def game_loop(game_id: str):
     control = game_controls[game_id]
     control.is_running = True
 
-    # Set game context for this greenlet
     set_game_context(game_id=game_id)
 
     try:
         while not game_state.game_over:
-            # Update context with current game state
             set_game_context(
                 phase=game_state.phase,
                 day_number=game_state.day_number,
                 current_step=game_state.current_step
             )
 
-            # Wait while paused
             while control.pause_event.is_set():
                 gevent.sleep(0.1)  # Cooperative yield
 
-            # Clear cancel event when resuming
             control.cancel_event.clear()
 
             try:
-                # Execute a single step
                 process_step(
                     game_state=game_state,
                     llm_client=llm_client,
@@ -158,7 +166,6 @@ def game_loop(game_id: str):
                 socketio.emit('pause_state', {'paused': True}, room=game_id)
                 continue
             except Exception as e:
-                # Log error with full traceback and context
                 log_exception(e, "Error in game loop", extra_context={
                     "game_over": game_state.game_over,
                     "step_index": game_state.step_index
@@ -190,18 +197,11 @@ def start_game():
     
     if len(players) < 3:
         return jsonify({"error": "Need at least 3 players"}), 400
-    
-    # Create game state
+
     game_state = GameState(players)
     games[game_state.game_id] = game_state
     
     return jsonify({"game_id": game_state.game_id, "redirect": url_for("game_view", game_id=game_state.game_id)})
-
-
-@socketio.on('connect')
-def handle_connect():
-    """Handle client connection."""
-    pass
 
 
 @socketio.on('join_game')
@@ -210,13 +210,26 @@ def handle_join_game(data):
     game_id = data.get('game_id')
     if game_id in games:
         join_room(game_id)
+
+        if game_id not in game_clients:
+            game_clients[game_id] = set()
+        game_clients[game_id].add(request.sid)
+
         emit('joined_game', {'game_id': game_id})
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    """Handle client disconnection."""
-    pass
+    """Handle client disconnection and cleanup empty games."""
+    games_to_check = []
+    for game_id, clients in list(game_clients.items()):
+        if request.sid in clients:
+            clients.remove(request.sid)
+            games_to_check.append(game_id)
+
+    for game_id in games_to_check:
+        if game_id in game_clients and len(game_clients[game_id]) == 0:
+            cleanup_game(game_id)
 
 
 @app.route("/game/<game_id>")
@@ -269,11 +282,9 @@ def start_game_loop(game_id):
     if game_id in game_controls and game_controls[game_id].is_running:
         return jsonify({"error": "Game already running"}), 400
 
-    # Create control structure
     control = GameControl()
     game_controls[game_id] = control
 
-    # Spawn game loop greenlet
     control.loop_greenlet = gevent.spawn(game_loop, game_id)
 
     return jsonify({"started": True})
@@ -318,6 +329,5 @@ def get_pause_state(game_id):
 
 
 if __name__ == "__main__":
-    # Use eventlet for proper WebSocket support
     socketio.run(app, debug=True, port=5000)
 
