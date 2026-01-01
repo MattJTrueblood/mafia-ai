@@ -10,7 +10,10 @@ def build_game_rules() -> str:
     Returns:
         String containing the rules of Mafia
     """
-    return """GAME RULES - MAFIA:
+    return """{SPECIAL HIGH PRIORITY OVERRIDING INSTRUCTIONS FOR AI REASONING, CHAIN OF THOUGHT, THINKING, ETC.:
+      Use Low Thinking, i.e. don't overthink it, only think about it for 300 Tokens.  If you exceed this, stop thinking, output asap}
+
+GAME RULES - MAFIA:
 
 This is a game of Mafia. The game alternates between night and day phases.
 
@@ -697,6 +700,7 @@ DAY 1 WARNING - This is the FIRST discussion. There is NO prior history.
     # Output quality rules
     output_rules = """
 OUTPUT QUALITY RULES:
+- Keep responses concise (1-2 sentences max). Be direct and specific.
 - Your message must reference ONLY information from PUBLIC_FACTS. Never reference PRIVATE_NOTES in public.
 - Do NOT simply recap what others have said without adding a NEW inference or angle.
 - Avoid vague filler like "we need to find mafia" or "let's work together" or "let's discuss last night's kill" unless followed by a specific observation.
@@ -958,9 +962,7 @@ This is the mafia discussion phase. You're talking privately with your fellow ma
 
 Alive players who could be targeted: {', '.join(alive_names)}
 
-Share your thoughts on who to target and why.
-
-Keep it under 60 words. Complete your thought - don't trail off.
+Share your thoughts on who to target and why. Keep discussion concise (2-3 sentences max). State your opinion clearly and directly.
 
 Your message (plain text, no JSON):"""
 
@@ -969,44 +971,35 @@ Your message (plain text, no JSON):"""
 
 def build_mafia_vote_prompt(game_state, player: "Player", previous_votes: List[Dict], discussion_messages: List[Dict] = None) -> str:
     """Build prompt for mafia night voting (after discussion)."""
-    context = build_game_context(game_state, viewing_player=player)
-    rules = build_game_rules()
-
     mafia_players = game_state.get_players_by_role("Mafia")
-    mafia_names = [p.name for p in mafia_players]
+    alive_players = game_state.get_alive_players()
+    alive_names = [p.name for p in alive_players]
 
     # Show discussion messages
     discussion_info = ""
     if discussion_messages:
-        discussion_info = "\nMafia discussion (just concluded):\n"
+        discussion_info = "Mafia discussion (just concluded):\n"
         for msg in discussion_messages:
             discussion_info += f"- {msg['player']}: {msg['message']}\n"
+        discussion_info += "\n"
 
     # Show previous votes
     votes_info = ""
     if previous_votes:
-        votes_info = "\nVotes so far:\n"
+        votes_info = "Votes so far:\n"
         for vote in previous_votes:
             target = vote.get("target", "abstain")
             votes_info += f"- {vote['player']} voted for {target}\n"
+        votes_info += "\n"
 
-    alive_players = game_state.get_alive_players()
-    alive_names = [p.name for p in alive_players]
-
-    prompt = f"""{rules}You are {player.name}, a member of the Mafia. Your fellow mafia members are: {', '.join(mafia_names)}.
-
-{context}
-{discussion_info}
-{votes_info}
-
-It's time to vote on who to kill tonight. Based on the discussion, choose your target.
+    prompt = f"""{discussion_info}{votes_info}You are {player.name}. Based on the discussion above, vote for who the Mafia should kill tonight.
 
 Available targets: {', '.join(alive_names)}
 
-Respond with a JSON object containing ONLY:
-- "target": the name of the player to kill, or null to abstain
+Respond with a JSON object:
+{{"target": "PlayerName"}}
 
-Example: {{"target": "Bob"}}"""
+(You can use null to abstain, but the Mafia needs to kill to win - abstaining is rarely strategic.)"""
 
     return prompt
 
@@ -1034,9 +1027,7 @@ It's the night phase. Think through who you should protect tonight.{constraint}
 
 Alive players: {', '.join(available_targets)}
 
-Think through who needs protection most and why.
-
-Keep it under 60 words. Complete your thought - don't trail off.
+Think through who needs protection most and why. Think through your decision briefly (2-3 sentences maximum).
 
 Your thoughts (plain text, no JSON):"""
 
@@ -1063,9 +1054,7 @@ It's the night phase. Think through who you should investigate tonight.
 
 Alive players: {', '.join(available_targets)}
 
-Think through who to investigate and why.
-
-Keep it under 60 words. Complete your thought - don't trail off.
+Think through who to investigate and why. Think through your decision briefly (2-3 sentences maximum).
 
 Your thoughts (plain text, no JSON):"""
 
@@ -1084,9 +1073,7 @@ It's the night phase. Think through whether you should use your bullet tonight.
 
 Alive players: {', '.join(available_targets)}
 
-Think through whether to use your bullet and on whom.
-
-Keep it under 60 words. Complete your thought - don't trail off.
+Think through whether to use your bullet and on whom. Think through your decision briefly (2-3 sentences maximum).
 
 Your thoughts (plain text, no JSON):"""
 

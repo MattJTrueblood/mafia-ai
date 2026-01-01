@@ -19,30 +19,73 @@ def load_openrouter_key():
 # Game configuration
 DEFAULT_PLAYER_COUNT = 7
 
-# Default models 
+# Default models - vetted for reliable tool calling performance
+# Tier 1: Production-ready, best tool calling benchmarks
 DEFAULT_MODELS = [
-    "qwen/qwen-turbo",
-    "mistralai/mistral-small-3.2-24b-instruct",
-    "meta-llama/llama-3.3-70b-instruct",
-    "meta-llama/llama-4-maverick",
-    "x-ai/grok-4-fast",
+    "x-ai/grok-4.1-fast",              # Best BFCL v4 score, great value
+    "anthropic/claude-sonnet-4.5",     # Strong agentic capabilities
+    "openai/gpt-5.2",                  # Premium flagship
+    "openai/gpt-5.1",                  # Flagship predecessor
+    # Tier 2: Good balance of performance and cost
+    "deepseek/deepseek-v3.2",          # Excellent value with reasoning
+    "openai/gpt-4o",                   # Proven reliable
+    "google/gemini-2.5-flash",         # Fast and affordable
+    "google/gemini-2.5-pro",           # More capable Gemini
+    # Tier 3: Budget/experimental options
+    "meta-llama/llama-4-maverick",     # Decent mid-tier
+    "moonshotai/kimi-k2-thinking",     # Complex reasoning specialist
+    "anthropic/claude-opus-4.5",       # Premium reasoning (expensive)
+    "mistralai/mistral-large-2512",    # Enterprise option
+]
+
+# Models that support tool calling (use Responses API)
+# ALL vetted models support tools!
+TOOL_MODELS = [
+    "x-ai/grok-4.1-fast",
+    "anthropic/claude-sonnet-4.5",
+    "anthropic/claude-opus-4.5",
+    "openai/gpt-5.2",
+    "openai/gpt-5.1",
+    "openai/gpt-4o",
     "deepseek/deepseek-v3.2",
-    "openai/gpt-5-mini",
-    "openai/gpt-4.1-mini",
+    "google/gemini-2.5-flash",
+    "google/gemini-2.5-pro",
+    "meta-llama/llama-4-maverick",
+    "moonshotai/kimi-k2-thinking",
     "mistralai/mistral-large-2512",
+]
+
+# Models that support reasoning (need reasoning params)
+REASONING_MODELS = [
+    "openai/gpt-5.2",                  # Adaptive reasoning
+    "openai/gpt-5.1",                  # Adaptive reasoning
+    "anthropic/claude-opus-4.5",       # Hybrid reasoning with effort levels
+    "anthropic/claude-sonnet-4.5",     # Hybrid reasoning with effort levels
+    "deepseek/deepseek-v3.2",          # Thinking in Tool-Use
+    "x-ai/grok-4.1-fast",              # Enable/disable reasoning
+    "google/gemini-2.5-pro",           # Built-in "thinking" capabilities
+    "google/gemini-2.5-flash",         # Built-in "thinking" capabilities
+    "moonshotai/kimi-k2-thinking",     # Persistent step-by-step reasoning
 ]
 
 # Model pricing dictionary (per 1M tokens: input / output)
 # Used for displaying pricing in the UI
+# Sorted by cost (cheapest to most expensive)
+# Verified via OpenRouter API 2025-12-31
 MODEL_PRICING = {
-    "qwen/qwen-turbo": {"input": 0.05, "output": 0.20},
-    "mistralai/mistral-small-3.2-24b-instruct": {"input": 0.06, "output": 0.18},
-    "meta-llama/llama-3.3-70b-instruct": {"input": 0.10, "output": 0.32},
+    # Budget tier (< $1 per 1M input)
     "meta-llama/llama-4-maverick": {"input": 0.15, "output": 0.60},
-    "x-ai/grok-4-fast": {"input": 0.20, "output": 0.50},
-    "deepseek/deepseek-v3.2": {"input": 0.224, "output": 0.32},
-    "openai/gpt-5-mini": {"input": 0.25, "output": 2.00},
-    "openai/gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "x-ai/grok-4.1-fast": {"input": 0.20, "output": 0.50},
+    "deepseek/deepseek-v3.2": {"input": 0.25, "output": 0.38},
+    "google/gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "moonshotai/kimi-k2-thinking": {"input": 0.40, "output": 1.75},
     "mistralai/mistral-large-2512": {"input": 0.50, "output": 1.50},
-    "openai/gpt-oss-20b": {"input": 0.03, "output": 0.14},
+    # Mid tier ($1-3 per 1M input)
+    "google/gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+    "openai/gpt-5.1": {"input": 1.25, "output": 10.00},
+    "openai/gpt-5.2": {"input": 1.75, "output": 14.00},
+    "openai/gpt-4o": {"input": 2.50, "output": 10.00},
+    "anthropic/claude-sonnet-4.5": {"input": 3.00, "output": 15.00},
+    # Premium tier (> $3 per 1M input)
+    "anthropic/claude-opus-4.5": {"input": 5.00, "output": 25.00},
 }

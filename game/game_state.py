@@ -200,7 +200,8 @@ class GameState:
         return None
 
     def add_event(self, event_type: str, message: str, visibility: str = "all",
-                  player: str = None, priority: int = None, metadata: dict = None) -> dict:
+                  player: str = None, priority: int = None, metadata: dict = None,
+                  reasoning: str = None) -> dict:
         """Add an event to the unified event log."""
         self._event_counter += 1
         event = {
@@ -214,6 +215,11 @@ class GameState:
             "priority": priority,
             "metadata": metadata
         }
+
+        # Add reasoning if present
+        if reasoning:
+            event["reasoning"] = reasoning
+
         self.events.append(event)
         return event
 

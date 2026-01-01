@@ -11,6 +11,12 @@ def initialize_logging(log_dir: str = "logs", log_level: int = logging.INFO):
     log_path = Path(log_dir)
     log_path.mkdir(exist_ok=True)
 
+    # Clear the log file at startup
+    log_file = log_path / "logs.txt"
+    if log_file.exists():
+        with open(log_file, 'w'):
+            pass  # Opening in write mode truncates the file
+
     logger = logging.getLogger()
     logger.setLevel(log_level)
     logger.handlers.clear()

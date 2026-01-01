@@ -444,6 +444,11 @@ function createEventElement(event, playerMap) {
         }
         content += `<span class="event-message">${escapeHtml(event.message)}</span>`;
 
+        // Add reasoning icon if reasoning exists
+        if (event.reasoning) {
+            content += `<span class="reasoning-icon" title="View reasoning">💭</span>`;
+        }
+
         if (event.visibility !== 'all' && event.visibility !== 'public') {
             content += `<span class="visibility-badge">${getVisibilityLabel(event.visibility)}</span>`;
         }
@@ -453,6 +458,18 @@ function createEventElement(event, playerMap) {
     }
 
     div.innerHTML = content;
+
+    // Add click handler for reasoning icon
+    if (event.reasoning) {
+        const reasoningIcon = div.querySelector('.reasoning-icon');
+        if (reasoningIcon) {
+            reasoningIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showReasoningModal(event.reasoning, event.player, event.type);
+            });
+        }
+    }
+
     return div;
 }
 
@@ -587,7 +604,7 @@ async function showPlayerContext(playerName) {
 
         currentContextData = data;
 
-        // Populate modal
+        // Populate modal header
         document.getElementById('modal-player-name').textContent = data.player_name;
         document.getElementById('modal-action-type').textContent = data.context.action_type || 'unknown';
         document.getElementById('modal-phase').textContent = data.context.phase || 'unknown';
@@ -599,51 +616,10 @@ async function showPlayerContext(playerName) {
         const estimatedTokens = Math.ceil(promptText.length / 4);
         document.getElementById('modal-tokens').textContent = estimatedTokens.toLocaleString();
 
-        // Display prompt
+        // Set section title and display prompt
+        document.getElementById('modal-section-title').textContent = 'Prompt';
         const prompt = data.context.messages?.[0]?.content || 'No prompt available';
-        document.getElementById('modal-prompt').textContent = prompt;
-
-        // Display response
-        const response_data = data.context.response || {};
-        let responseText = '';
-
-        // Content section
-        responseText += '=== CONTENT ===\n';
-        responseText += response_data.content || '(empty)';
-
-        // Structured output section
-        responseText += '\n\n=== STRUCTURED OUTPUT ===\n';
-        if (response_data.structured_output) {
-            responseText += JSON.stringify(response_data.structured_output, null, 2);
-        } else {
-            responseText += '(none)';
-        }
-
-        // Reasoning section (always show)
-        responseText += '\n\n=== MODEL REASONING ===\n';
-        if (response_data.reasoning) {
-            responseText += response_data.reasoning;
-        } else {
-            responseText += '(none - OpenAI models do not expose reasoning tokens)';
-        }
-
-        // Raw API response section
-        responseText += '\n\n=== RAW API MESSAGE ===\n';
-        if (response_data.raw_message) {
-            responseText += JSON.stringify(response_data.raw_message, null, 2);
-        } else {
-            responseText += '(not available)';
-        }
-
-        // Error section (always show)
-        responseText += '\n\n=== ERROR ===\n';
-        if (data.context.error) {
-            responseText += data.context.error;
-        } else {
-            responseText += '(none)';
-        }
-
-        document.getElementById('modal-response').textContent = responseText;
+        document.getElementById('modal-content-text').textContent = prompt;
 
         // Show modal
         document.getElementById('context-modal').classList.add('active');
@@ -665,20 +641,31 @@ function closeContextModal() {
     }
 }
 
+function showReasoningModal(reasoning, playerName, eventType) {
+    // Populate modal with reasoning data
+    document.getElementById('modal-player-name').textContent = playerName;
+
+    // Set event type and clear other metadata
+    const typeLabel = eventType.replace('_', ' ').toUpperCase();
+    document.getElementById('modal-action-type').textContent = typeLabel;
+    document.getElementById('modal-phase').textContent = '-';
+    document.getElementById('modal-day').textContent = '-';
+    document.getElementById('modal-timestamp').textContent = '-';
+    document.getElementById('modal-tokens').textContent = '-';
+
+    // Set section title and display reasoning
+    document.getElementById('modal-section-title').textContent = 'Model Reasoning';
+    document.getElementById('modal-content-text').textContent = reasoning;
+
+    // Show modal
+    document.getElementById('context-modal').classList.add('active');
+}
+
 function copyContext() {
     if (!currentContextData) return;
 
     const ctx = currentContextData.context;
     const prompt = ctx.messages?.[0]?.content || 'No prompt';
-    const response = ctx.response?.content || '(empty)';
-    const structured = ctx.response?.structured_output
-        ? JSON.stringify(ctx.response.structured_output, null, 2)
-        : '(none)';
-    const reasoning = ctx.response?.reasoning || '(none)';
-    const rawMessage = ctx.response?.raw_message
-        ? JSON.stringify(ctx.response.raw_message, null, 2)
-        : '(not available)';
-    const error = ctx.error || '(none)';
     const estimatedTokens = Math.ceil(prompt.length / 4);
 
     const textToCopy = `=== LLM Context for ${currentContextData.player_name} ===
@@ -690,21 +677,6 @@ Est. Tokens: ${estimatedTokens.toLocaleString()}
 
 === PROMPT ===
 ${prompt}
-
-=== CONTENT ===
-${response}
-
-=== STRUCTURED OUTPUT ===
-${structured}
-
-=== MODEL REASONING ===
-${reasoning}
-
-=== RAW API MESSAGE ===
-${rawMessage}
-
-=== ERROR ===
-${error}
 `;
 
     navigator.clipboard.writeText(textToCopy).then(() => {
