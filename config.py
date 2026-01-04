@@ -55,18 +55,6 @@ TOOL_MODELS = [
     "mistralai/mistral-large-2512",
 ]
 
-# Models that support reasoning (need reasoning params)
-REASONING_MODELS = [
-    "openai/gpt-5.2",                  # Adaptive reasoning
-    "openai/gpt-5.1",                  # Adaptive reasoning
-    "anthropic/claude-opus-4.5",       # Hybrid reasoning with effort levels
-    "anthropic/claude-sonnet-4.5",     # Hybrid reasoning with effort levels
-    "deepseek/deepseek-v3.2",          # Thinking in Tool-Use
-    "x-ai/grok-4.1-fast",              # Enable/disable reasoning
-    "google/gemini-2.5-pro",           # Built-in "thinking" capabilities
-    "google/gemini-2.5-flash",         # Built-in "thinking" capabilities
-]
-
 # Model pricing dictionary (per 1M tokens: input / output)
 # Used for displaying pricing in the UI
 # Sorted by cost (cheapest to most expensive)

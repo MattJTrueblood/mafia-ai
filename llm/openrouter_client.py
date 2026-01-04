@@ -4,8 +4,8 @@ import json
 import logging
 import time
 import requests
-from typing import Dict, List, Optional, Any
-from config import load_openrouter_key, TOOL_MODELS, REASONING_MODELS
+from typing import Dict, List, Optional, Any, Callable
+from config import load_openrouter_key, TOOL_MODELS
 
 
 class LLMCancelledException(Exception):
@@ -16,12 +16,14 @@ class LLMCancelledException(Exception):
 class OpenRouterClient:
     """Client for interacting with OpenRouter API."""
 
+    CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+    RESPONSES_URL = "https://openrouter.ai/api/v1/responses"
+    DEFAULT_TIMEOUT = 30
+    MAX_RETRIES = 3
+    BASE_RETRY_DELAY = 1
+
     def __init__(self):
         self.api_key = load_openrouter_key()
-        self.chat_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.responses_url = "https://openrouter.ai/api/v1/responses"
-        self.max_retries = 3
-        self.retry_delay = 1
 
     def call_model(
         self,
@@ -29,7 +31,6 @@ class OpenRouterClient:
         messages: List[Dict[str, str]],
         response_format: Optional[Dict[str, Any]] = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
         cancel_event: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
@@ -42,7 +43,6 @@ class OpenRouterClient:
             messages: List of message dicts with "role" and "content"
             response_format: Optional structured output schema
             temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
             cancel_event: Optional gevent.event.Event to check for cancellation
 
         Returns:
@@ -51,173 +51,86 @@ class OpenRouterClient:
         Raises:
             LLMCancelledException: If cancel_event is set during the call
         """
-        # Check cancellation
-        if cancel_event and cancel_event.is_set():
-            raise LLMCancelledException("Call cancelled before starting")
+        self._check_cancellation(cancel_event, "before starting")
 
-        # Route to appropriate API:
-        # Use Responses API if model supports tools AND we're requesting structured output
-        # Otherwise use Chat API (plain text OR model doesn't support tools)
         use_responses_api = self._supports_tools(model) and response_format is not None
 
         if use_responses_api:
             return self._call_responses_api(
-                model, messages, response_format, temperature, max_tokens, cancel_event
+                model, messages, response_format, temperature, cancel_event
             )
         else:
             return self._call_chat_api(
-                model, messages, response_format, temperature, max_tokens, cancel_event
+                model, messages, temperature, cancel_event
             )
+
+    def _supports_tools(self, model: str) -> bool:
+        """Check if model uses Responses API with tools."""
+        return model in TOOL_MODELS
 
     def _call_chat_api(
         self,
         model: str,
         messages: List[Dict[str, str]],
-        response_format: Optional[Dict[str, Any]],
         temperature: float,
-        max_tokens: Optional[int],
         cancel_event: Optional[Any]
     ) -> Dict[str, Any]:
-        """Call Chat API (traditional completions endpoint)."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/mafia-ai",
-            "X-Title": "Mafia AI Game",
-        }
+        """Call Chat API (traditional completions endpoint for freeform text)."""
+        payload = self._build_chat_payload(model, messages, temperature)
+        response_data = self._execute_chat_request(payload, model, cancel_event)
+        return self._parse_chat_response(response_data, model)
 
-        payload = {
+    def _build_chat_payload(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        temperature: float
+    ) -> Dict[str, Any]:
+        """Build Chat API request payload."""
+        return {
             "model": model,
             "messages": messages,
             "temperature": temperature,
         }
 
-        # Disable reasoning for reasoning models
-        if self._is_reasoning_model(model):
-            # Different models use different reasoning parameter formats
-            if "deepseek" in model.lower():
-                # DeepSeek: Explicitly disable reasoning
-                payload["reasoning"] = {
-                    "enabled": False,
-                }
-            elif "moonshotai" in model.lower() or "kimi" in model.lower():
-                # Kimi: Built-in reasoning can't be disabled - omit config
-                pass
-            elif "gemini" in model.lower() or "google" in model.lower():
-                # Gemini: Built-in thinking can't be disabled - omit config
-                pass
-            else:
-                # OpenAI (GPT-5, o1, o3), Anthropic, Grok: Exclude reasoning tokens
-                payload["reasoning"] = {
-                    "effort": "low",
-                    "exclude": True,  # Exclude reasoning from response
-                }
+    def _execute_chat_request(
+        self,
+        payload: Dict[str, Any],
+        model: str,
+        cancel_event: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Execute Chat API HTTP request with retry logic."""
+        logging.info(f"Calling Chat API: {model}")
 
-        if response_format:
-            payload["response_format"] = response_format
+        def api_call():
+            return requests.post(
+                self.CHAT_URL,
+                headers=self._build_headers(),
+                json=payload,
+                timeout=self.DEFAULT_TIMEOUT
+            )
 
-        # Note: max_tokens intentionally not set to prevent output truncation
-        # Token usage is controlled through prompting instead
+        response = self._retry_with_cancellation(api_call, cancel_event, "Chat API")
+        return response.json()
 
-        # Debug logging
-        logging.info(f"Chat API request: model={model}, messages_count={len(messages)}, has_response_format={response_format is not None}, payload_keys={list(payload.keys())}")
+    def _parse_chat_response(self, data: Dict[str, Any], model: str) -> Dict[str, Any]:
+        """Parse and validate Chat API response."""
+        if data.get("error"):
+            logging.error(f"OpenRouter API error: {data['error']}")
+            raise Exception(f"OpenRouter API error: {data['error']}")
 
-        # Retry logic
-        for attempt in range(self.max_retries):
-            if cancel_event and cancel_event.is_set():
-                raise LLMCancelledException("Call cancelled before attempt")
+        if not data.get("choices"):
+            logging.error("OpenRouter returned no choices")
+            raise Exception("OpenRouter returned no choices")
 
-            try:
-                response = requests.post(
-                    self.chat_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=30
-                )
+        message = data["choices"][0]["message"]
+        content = message.get("content") or ""
 
-                # Log error details before raising
-                if response.status_code != 200:
-                    try:
-                        error_data = response.json()
-                        logging.error(f"Chat API error {response.status_code}: {error_data}")
-                    except:
-                        logging.error(f"Chat API error {response.status_code}: {response.text}")
+        if not content:
+            logging.warning(f"Empty response from model {model}")
 
-                response.raise_for_status()
-
-                if cancel_event and cancel_event.is_set():
-                    raise LLMCancelledException("Call cancelled after response")
-
-                data = response.json()
-
-                # Debug logging - log full message structure for diagnosis
-                if data.get("choices"):
-                    message = data["choices"][0]["message"]
-                    content = message.get("content") or ""
-                    has_reasoning_details = "reasoning_details" in message
-                    has_reasoning = "reasoning" in message
-                    logging.info(
-                        f"Chat API response: model={model}, "
-                        f"message_keys={list(message.keys())}, "
-                        f"content_length={len(content)}, "
-                        f"has_reasoning_details={has_reasoning_details}, "
-                        f"has_reasoning={has_reasoning}"
-                    )
-                else:
-                    logging.info(f"Chat API response: model={model}, has_choices=False")
-
-                if data.get("error"):
-                    logging.error(f"OpenRouter API error: {data['error']}")
-                    raise Exception(f"OpenRouter API error: {data['error']}")
-
-                if not data.get("choices"):
-                    logging.error("OpenRouter returned no choices")
-                    raise Exception("OpenRouter returned no choices")
-
-                message = data["choices"][0]["message"]
-                content = message.get("content") or ""
-
-                # Log token usage for cost monitoring
-                if "usage" in data:
-                    usage = data["usage"]
-                    total_tokens = usage.get("total_tokens", 0)
-                    # Responses API uses input_tokens/output_tokens, Chat API uses prompt_tokens/completion_tokens
-                    prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens", 0)
-                    logging.info(f"Token usage for {model}: {total_tokens} total ({prompt_tokens} prompt + {completion_tokens} completion)")
-
-                # Warn if content is empty
-                if not content:
-                    logging.warning(f"Empty response from model {model}")
-
-                result = {"content": content}
-
-                # Extract structured output
-                if "structured_outputs" in message:
-                    result["structured_output"] = message["structured_outputs"]
-                elif "structured_output" in message:
-                    result["structured_output"] = message["structured_output"]
-
-                return result
-
-            except LLMCancelledException:
-                raise
-            except requests.exceptions.Timeout:
-                if cancel_event and cancel_event.is_set():
-                    raise LLMCancelledException("Call cancelled during timeout")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (attempt + 1))
-                    continue
-                raise Exception(f"OpenRouter API timeout after {self.max_retries} attempts")
-            except requests.exceptions.RequestException as e:
-                if cancel_event and cancel_event.is_set():
-                    raise LLMCancelledException("Call cancelled during error")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (attempt + 1))
-                    continue
-                raise Exception(f"OpenRouter API error after {self.max_retries} attempts: {str(e)}")
-
-        raise Exception("Failed to call OpenRouter API")
+        result = {"content": content}
+        return result
 
     def _call_responses_api(
         self,
@@ -225,18 +138,21 @@ class OpenRouterClient:
         messages: List[Dict[str, str]],
         response_format: Dict[str, Any],
         temperature: float,
-        max_tokens: Optional[int],
         cancel_event: Optional[Any]
     ) -> Dict[str, Any]:
-        """Call Responses API (tool calling endpoint)."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/mafia-ai",
-            "X-Title": "Mafia AI Game",
-        }
+        """Call Responses API (tool calling endpoint for structured outputs)."""
+        payload = self._build_responses_payload(model, messages, response_format, temperature)
+        response_data = self._execute_responses_request(payload, model, cancel_event)
+        return self._parse_responses_output(response_data, model)
 
-        # Convert messages to Responses API input format
+    def _build_responses_payload(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        response_format: Dict[str, Any],
+        temperature: float
+    ) -> Dict[str, Any]:
+        """Build Responses API request payload."""
         input_messages = self._messages_to_input(messages)
 
         payload = {
@@ -247,165 +163,121 @@ class OpenRouterClient:
             "tool_choice": {"type": "function", "name": "structured_response"}
         }
 
-        # Debug logging - log the full payload
-        logging.info(f"Responses API payload: {json.dumps(payload, indent=2)}")
+        return payload
 
-        # Disable reasoning for reasoning models
-        if self._is_reasoning_model(model):
-            # Different models use different reasoning parameter formats
-            if "deepseek" in model.lower():
-                # DeepSeek: Explicitly disable reasoning
-                payload["reasoning"] = {
-                    "enabled": False,
-                }
-            elif "moonshotai" in model.lower() or "kimi" in model.lower():
-                # Kimi: Built-in reasoning can't be disabled - omit config
-                pass
-            elif "gemini" in model.lower() or "google" in model.lower():
-                # Gemini: Built-in thinking can't be disabled - omit config
-                pass
-            else:
-                # OpenAI (GPT-5, o1, o3), Anthropic, Grok: Exclude reasoning tokens
-                payload["reasoning"] = {
-                    "effort": "low",
-                    "exclude": True,  # Exclude reasoning from response
-                }
+    def _execute_responses_request(
+        self,
+        payload: Dict[str, Any],
+        model: str,
+        cancel_event: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Execute Responses API HTTP request with retry logic."""
+        logging.info(f"Calling Responses API: {model}")
 
-        # Note: max_tokens intentionally not set to prevent output truncation
-        # Token usage is controlled through prompting instead
+        def api_call():
+            return requests.post(
+                self.RESPONSES_URL,
+                headers=self._build_headers(),
+                json=payload,
+                timeout=self.DEFAULT_TIMEOUT
+            )
 
-        # Retry logic
-        for attempt in range(self.max_retries):
-            if cancel_event and cancel_event.is_set():
-                raise LLMCancelledException("Call cancelled before attempt")
+        response = self._retry_with_cancellation(api_call, cancel_event, "Responses API")
+        return response.json()
+
+    def _parse_responses_output(self, data: Dict[str, Any], model: str) -> Dict[str, Any]:
+        """Parse and extract structured output from Responses API."""
+        if data.get("error"):
+            logging.error(f"OpenRouter API error: {data['error']}")
+            raise Exception(f"OpenRouter API error: {data['error']}")
+
+        if not data.get("output"):
+            logging.error("OpenRouter Responses API returned no output")
+            raise Exception("OpenRouter Responses API returned no output")
+
+        output = data["output"]
+        content = data.get("output_text") or ""
+
+        result = {"content": content}
+
+        for item in output:
+            if item.get("type") == "function_call":
+                arguments_str = item.get("arguments", "{}")
+                try:
+                    result["structured_output"] = json.loads(arguments_str)
+                except json.JSONDecodeError as e:
+                    logging.error(f"Failed to parse structured output JSON for {model}: {e}")
+                    logging.error(f"Raw arguments: {arguments_str}")
+                break
+
+        return result
+
+    def _build_headers(self) -> Dict[str, str]:
+        """Build common HTTP headers for OpenRouter API."""
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/mafia-ai",
+            "X-Title": "Mafia AI Game",
+        }
+
+    def _check_cancellation(self, cancel_event: Optional[Any], context: str) -> None:
+        """Check if operation has been cancelled."""
+        if cancel_event and cancel_event.is_set():
+            raise LLMCancelledException(f"Call cancelled {context}")
+
+    def _retry_with_cancellation(
+        self,
+        api_call: Callable[[], requests.Response],
+        cancel_event: Optional[Any],
+        api_name: str
+    ) -> requests.Response:
+        """Execute API call with retry logic and cancellation support."""
+        for attempt in range(self.MAX_RETRIES):
+            self._check_cancellation(cancel_event, "before attempt")
 
             try:
-                response = requests.post(
-                    self.responses_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=30
-                )
+                response = api_call()
 
-                # Log error details before raising
                 if response.status_code != 200:
-                    try:
-                        error_data = response.json()
-                        logging.error(f"Responses API error {response.status_code}: {error_data}")
-                    except:
-                        logging.error(f"Responses API error {response.status_code}: {response.text}")
+                    self._log_api_error(response, api_name)
 
                 response.raise_for_status()
-
-                if cancel_event and cancel_event.is_set():
-                    raise LLMCancelledException("Call cancelled after response")
-
-                data = response.json()
-
-                # Debug: log the full response structure
-                logging.info(f"Responses API response: {json.dumps(data, indent=2)}")
-
-                if data.get("error"):
-                    logging.error(f"OpenRouter API error: {data['error']}")
-                    raise Exception(f"OpenRouter API error: {data['error']}")
-
-                if not data.get("output"):
-                    logging.error("OpenRouter Responses API returned no output")
-                    raise Exception("OpenRouter Responses API returned no output")
-
-                # Extract content and structured output from output array
-                output = data["output"]
-                content = data.get("output_text") or ""
-
-                result = {"content": content}
-
-                # Extract function call from output array
-                for item in output:
-                    if item.get("type") == "function_call":
-                        arguments_str = item.get("arguments", "{}")
-                        result["structured_output"] = json.loads(arguments_str)
-                        break
-
-                # Fallback: Some models (like Kimi K2) put structured output inside reasoning text
-                # Look for JSON in reasoning content if no function_call found
-                if "structured_output" not in result:
-                    for item in output:
-                        if item.get("type") == "reasoning":
-                            for content_item in item.get("content", []):
-                                if content_item.get("type") == "reasoning_text":
-                                    text = content_item.get("text", "")
-                                    # Try to extract JSON from reasoning text
-                                    # Look for patterns like: {"key": "value"}
-                                    try:
-                                        # Find first { and last } to extract JSON
-                                        start = text.find("{")
-                                        end = text.rfind("}") + 1
-                                        if start >= 0 and end > start:
-                                            json_str = text[start:end]
-                                            # Try to parse it
-                                            parsed = json.loads(json_str)
-                                            result["structured_output"] = parsed
-                                            break
-                                    except (json.JSONDecodeError, ValueError):
-                                        continue
-                            if "structured_output" in result:
-                                break
-
-                # Log token usage for cost monitoring
-                if "usage" in data:
-                    usage = data["usage"]
-                    total_tokens = usage.get("total_tokens", 0)
-                    # Responses API uses input_tokens/output_tokens, Chat API uses prompt_tokens/completion_tokens
-                    prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens", 0)
-                    logging.info(f"Token usage for {model}: {total_tokens} total ({prompt_tokens} prompt + {completion_tokens} completion)")
-
-                return result
+                self._check_cancellation(cancel_event, "after response")
+                return response
 
             except LLMCancelledException:
                 raise
             except requests.exceptions.Timeout:
                 if cancel_event and cancel_event.is_set():
                     raise LLMCancelledException("Call cancelled during timeout")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (attempt + 1))
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(self.BASE_RETRY_DELAY * (attempt + 1))
                     continue
-                raise Exception(f"OpenRouter API timeout after {self.max_retries} attempts")
+                raise Exception(f"{api_name} timeout after {self.MAX_RETRIES} attempts")
             except requests.exceptions.RequestException as e:
                 if cancel_event and cancel_event.is_set():
                     raise LLMCancelledException("Call cancelled during error")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (attempt + 1))
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(self.BASE_RETRY_DELAY * (attempt + 1))
                     continue
-                raise Exception(f"OpenRouter API error after {self.max_retries} attempts: {str(e)}")
+                raise Exception(f"{api_name} error after {self.MAX_RETRIES} attempts: {str(e)}")
 
-        raise Exception("Failed to call OpenRouter API")
+        raise Exception(f"Failed to call {api_name}")
 
-    def _supports_tools(self, model: str) -> bool:
-        """Check if model uses Responses API with tools."""
-        return model in TOOL_MODELS
-
-    def _is_reasoning_model(self, model: str) -> bool:
-        """Check if model supports reasoning."""
-        return model in REASONING_MODELS
+    def _log_api_error(self, response: requests.Response, api_name: str) -> None:
+        """Log API error details."""
+        try:
+            error_data = response.json()
+            logging.error(f"{api_name} error {response.status_code}: {error_data}")
+        except Exception:
+            logging.error(f"{api_name} error {response.status_code}: {response.text}")
 
     def _schema_to_tool(self, schema: dict, name: str = "structured_response") -> dict:
-        """Convert a JSON schema to an OpenRouter Responses API tool definition.
-
-        Args:
-            schema: JSON schema from response_format (Chat API format with json_schema wrapper)
-            name: Function name for the tool
-
-        Returns:
-            Tool definition dict
-        """
-        # Extract the actual schema from the Chat API response_format wrapper
-        # response_format has format: {"type": "json_schema", "json_schema": {"name": "...", "schema": {...}}}
-        # We need just the inner schema object
+        """Convert a JSON schema to an OpenRouter Responses API tool definition."""
         if "json_schema" in schema and "schema" in schema["json_schema"]:
             actual_schema = schema["json_schema"]["schema"]
         else:
-            # Fallback: assume it's already a raw schema
             actual_schema = schema
 
         return {
@@ -416,14 +288,7 @@ class OpenRouterClient:
         }
 
     def _messages_to_input(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        """Convert Chat API messages format to Responses API input format.
-
-        Chat API format:
-            [{"role": "user", "content": "text"}, ...]
-
-        Responses API format:
-            [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "text"}]}, ...]
-        """
+        """Convert Chat API messages format to Responses API input format."""
         input_messages = []
         for msg in messages:
             input_msg = {
