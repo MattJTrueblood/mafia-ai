@@ -346,22 +346,6 @@ button {
     color: #3498db; /* Blue for response */
 }
 
-/* Reasoning icon in event log */
-.reasoning-icon {
-    display: inline-block;
-    margin-left: 8px;
-    font-size: 1.1em;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s, transform 0.2s;
-    vertical-align: middle;
-}
-
-.reasoning-icon:hover {
-    opacity: 1;
-    transform: scale(1.2);
-}
-
 /* Priority badges */
 .priority-badge {
     display: inline-block;

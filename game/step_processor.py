@@ -36,10 +36,9 @@ from llm.prompts import (
 ACTION_SCHEMA = {
     "type": "object",
     "properties": {
-        "target": {"type": ["string", "null"]},
-        "reasoning": {"type": "string"}
+        "target": {"type": ["string", "null"]}
     },
-    "required": ["target", "reasoning"]
+    "required": ["target"]
 }
 
 TARGET_ONLY_SCHEMA = {
@@ -204,13 +203,9 @@ def process_step(
             "message": message
         })
 
-        # Extract reasoning from last LLM response if available
-        reasoning = mafia.last_llm_context.get("response", {}).get("reasoning")
-
         # Log the discussion message
         game_state.add_event("mafia_chat", f"[Mafia Discussion] {mafia.name}: {message}", "mafia",
-                            player=mafia.name, priority=7,
-                            reasoning=reasoning)
+                            player=mafia.name, priority=7)
         emit_update()
 
         # Advance to next mafia member
@@ -247,13 +242,9 @@ def process_step(
             if target and target not in alive_names:
                 target = None
 
-            # Extract reasoning from LLM response if available
-            reasoning = response.get("reasoning")
-
             # Log the vote immediately when this player completes
             vote_msg = f"[Mafia Vote] {mafia.name} votes to kill {target}" if target else f"[Mafia Vote] {mafia.name} abstains"
-            game_state.add_event("mafia_chat", vote_msg, "mafia", player=mafia.name, priority=7,
-                                reasoning=reasoning)
+            game_state.add_event("mafia_chat", vote_msg, "mafia", player=mafia.name, priority=7)
 
             return {"player": mafia.name, "target": target}
 
@@ -296,12 +287,8 @@ def process_step(
         discussion = _execute_role_discussion(game_state, doctor, "doctor", llm_client, cancel_event, emit_player_status)
         game_state.phase_data["doctor_discussion"] = discussion
 
-        # Extract reasoning from last LLM response if available
-        reasoning = doctor.last_llm_context.get("response", {}).get("reasoning")
-
         game_state.add_event("role_action", f"[Doctor Discussion] {doctor.name}: {discussion}",
-                            "doctor", player=doctor.name, priority=6,
-                            reasoning=reasoning)
+                            "doctor", player=doctor.name, priority=6)
         emit_update()
 
         game_state.current_step = GameState.STEP_DOCTOR_ACT
@@ -325,12 +312,8 @@ def process_step(
             doctor.role.last_protected = target
             game_state.phase_data["protected_player"] = target
 
-            # Extract reasoning from last LLM response if available
-            reasoning = doctor.last_llm_context.get("response", {}).get("reasoning")
-
             game_state.add_event("role_action", f"Doctor {doctor.name} protects {target}.",
-                                "doctor", player=doctor.name, priority=7,
-                                reasoning=reasoning)
+                                "doctor", player=doctor.name, priority=7)
 
         game_state.phase_data["doctor_protection"] = {"target": target}
         game_state.add_event("system", "Doctor night phase ends.", "doctor")
@@ -356,12 +339,8 @@ def process_step(
         discussion = _execute_role_discussion(game_state, sheriff, "sheriff", llm_client, cancel_event, emit_player_status)
         game_state.phase_data["sheriff_discussion"] = discussion
 
-        # Extract reasoning from last LLM response if available
-        reasoning = sheriff.last_llm_context.get("response", {}).get("reasoning")
-
         game_state.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {discussion}",
-                            "sheriff", player=sheriff.name, priority=6,
-                            reasoning=reasoning)
+                            "sheriff", player=sheriff.name, priority=6)
         emit_update()
 
         game_state.current_step = GameState.STEP_SHERIFF_ACT
@@ -382,12 +361,8 @@ def process_step(
                 result = "mafia" if target_player.team == "mafia" else "town"
                 sheriff.role.investigations.append((target, result))
 
-                # Extract reasoning from last LLM response if available
-                reasoning = sheriff.last_llm_context.get("response", {}).get("reasoning")
-
                 game_state.add_event("role_action", f"Sheriff {sheriff.name} investigates {target}.",
-                                    "sheriff", player=sheriff.name, priority=7,
-                                    reasoning=reasoning)
+                                    "sheriff", player=sheriff.name, priority=7)
                 game_state.add_event("role_action", f"{target} is {result.upper()}!",
                                     "sheriff", player=sheriff.name, priority=8,
                                     metadata={"target": target, "result": result})
@@ -397,12 +372,8 @@ def process_step(
                     game_state, sheriff, target, result, llm_client, cancel_event, emit_player_status
                 )
                 if reaction:
-                    # Extract reasoning from post-investigation response
-                    reaction_reasoning = sheriff.last_llm_context.get("response", {}).get("reasoning")
-
                     game_state.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {reaction}",
-                                        "sheriff", player=sheriff.name, priority=9,
-                                        reasoning=reaction_reasoning)
+                                        "sheriff", player=sheriff.name, priority=9)
 
         game_state.phase_data["sheriff_investigation"] = {"target": target, "result": result}
         game_state.add_event("system", "Sheriff night phase ends.", "sheriff")
@@ -435,12 +406,8 @@ def process_step(
         discussion = _execute_role_discussion(game_state, vigilante, "vigilante", llm_client, cancel_event, emit_player_status)
         game_state.phase_data["vigilante_discussion"] = discussion
 
-        # Extract reasoning from last LLM response if available
-        reasoning = vigilante.last_llm_context.get("response", {}).get("reasoning")
-
         game_state.add_event("role_action", f"[Vigilante Discussion] {vigilante.name}: {discussion}",
-                            "vigilante", player=vigilante.name, priority=6,
-                            reasoning=reasoning)
+                            "vigilante", player=vigilante.name, priority=6)
         emit_update()
 
         game_state.current_step = GameState.STEP_VIGILANTE_ACT
@@ -454,18 +421,13 @@ def process_step(
         # Get actual target
         target = _execute_role_action(game_state, vigilante, "vigilante", llm_client, cancel_event, emit_player_status)
 
-        # Extract reasoning from last LLM response if available
-        reasoning = vigilante.last_llm_context.get("response", {}).get("reasoning")
-
         if target:
             vigilante.role.bullet_used = True
             game_state.add_event("role_action", f"Vigilante shoots {target} tonight.",
-                                "vigilante", player=vigilante.name, priority=7,
-                                reasoning=reasoning)
+                                "vigilante", player=vigilante.name, priority=7)
         else:
             game_state.add_event("role_action", "Vigilante shoots nobody tonight.",
-                                "vigilante", player=vigilante.name, priority=7,
-                                reasoning=reasoning)
+                                "vigilante", player=vigilante.name, priority=7)
 
         game_state.phase_data["vigilante_kill"] = {"target": target}
         game_state.add_event("system", "Vigilante night phase ends.", "vigilante")
@@ -535,6 +497,7 @@ def process_step(
         if current_idx >= len(speaker_order):
             # All players have introduced themselves - move to voting
             game_state.add_event("system", "Introduction phase complete.", "all")
+            emit_status("turn_polling", waiting_player=None)
             emit_update()
             game_state.current_step = GameState.STEP_VOTING
             game_state.step_index = 0
@@ -555,13 +518,9 @@ def process_step(
         introduction = _get_introduction_message(game_state, speaker, llm_client, cancel_event, emit_player_status)
 
         if introduction:
-            # Extract reasoning from last LLM response if available
-            reasoning = speaker.last_llm_context.get("response", {}).get("reasoning")
-
             # Add introduction to game log
             game_state.add_event("discussion", introduction, "public", player=speaker_name,
-                                metadata={"turn_type": "introduction"},
-                                reasoning=reasoning)
+                                metadata={"turn_type": "introduction"})
 
             # Track in phase data for history
             if "discussion_messages" not in game_state.phase_data:
@@ -592,6 +551,7 @@ def process_step(
             logging.info(f"[POLL] Max messages reached, moving to voting")
             emit_status("discussion_end")
             game_state.add_event("system", f"Day {game_state.day_number} discussion phase ends.", "all")
+            emit_status("turn_polling", waiting_player=None)
             game_state.current_step = GameState.STEP_VOTING
             game_state.step_index = 0
             emit_update()
@@ -605,6 +565,7 @@ def process_step(
 
         if not speaker_order:
             # No speakers, move to voting
+            emit_status("turn_polling", waiting_player=None)
             game_state.current_step = GameState.STEP_VOTING
             game_state.step_index = 0
             return StepResult()
@@ -633,6 +594,7 @@ def process_step(
         if not current_speaker:
             # No valid speakers found, move to voting
             logging.info(f"[POLL] No valid speaker found, moving to voting")
+            emit_status("turn_polling", waiting_player=None)
             game_state.current_step = GameState.STEP_VOTING
             game_state.step_index = 0
             return StepResult()
@@ -766,12 +728,8 @@ def process_step(
             else:
                 turn_type = "regular"
 
-            # Extract reasoning from last LLM response if available
-            reasoning = speaker.last_llm_context.get("response", {}).get("reasoning")
-
             game_state.add_event("discussion", message, "public", player=speaker_name,
-                                metadata={"turn_type": turn_type},
-                                reasoning=reasoning)
+                                metadata={"turn_type": turn_type})
             game_state.phase_data["discussion_messages"].append({
                 "player": speaker_name,
                 "message": message,
@@ -860,12 +818,8 @@ def process_step(
             if explanation:
                 msg += f" {explanation}"
 
-            # Extract reasoning from LLM response if available
-            reasoning = response.get("reasoning")
-
             game_state.add_event("vote", msg, "all", player=player.name, priority=8,
-                                metadata={"target": vote_target},
-                                reasoning=reasoning)
+                                metadata={"target": vote_target})
 
             return {"player": player.name, "vote": vote_target, "explanation": explanation}
 
@@ -945,11 +899,7 @@ def process_step(
         message = _execute_postgame_discussion(game_state, player, llm_client, cancel_event, emit_player_status)
 
         if message:
-            # Extract reasoning from last LLM response if available
-            reasoning = player.last_llm_context.get("response", {}).get("reasoning")
-
-            game_state.add_event("discussion", message, "all", player=player.name,
-                                reasoning=reasoning)
+            game_state.add_event("discussion", message, "all", player=player.name)
             game_state.phase_data["postgame_messages"].append({
                 "player": player.name,
                 "message": message
@@ -1013,12 +963,8 @@ def process_step(
                     target = random.choice(others) if others else None
                     reason = reason or "Good game."
 
-                # Extract reasoning from LLM response if available
-                reasoning = response.get("reasoning")
-
                 # Log immediately
-                game_state.add_event("vote", f"I vote {target}. {reason}", "all", player=player.name,
-                                    reasoning=reasoning)
+                game_state.add_event("vote", f"I vote {target}. {reason}", "all", player=player.name)
 
                 return {"player": player.name, "target": target, "reason": reason}
 
@@ -1071,7 +1017,7 @@ def _execute_mafia_vote(
 ) -> Dict:
     """Execute a single mafia member's vote."""
     alive_names = [p.name for p in game_state.get_alive_players()]
-    prev = [{"player": v["player"], "target": v.get("target"), "reasoning": v.get("reasoning", "")}
+    prev = [{"player": v["player"], "target": v.get("target")}
             for v in previous_votes]
 
     prompt = build_mafia_vote_prompt(game_state, mafia, prev)
@@ -1093,17 +1039,16 @@ def _execute_mafia_vote(
     )
     mafia.last_llm_context["response"] = response
 
-    target, reasoning = _parse_action_response(response)
+    target = _parse_action_response(response)
 
     # Log mafia discussion
-    if reasoning:
-        if target:
-            msg = f"[Mafia Discussion] I think we should target {target}. {reasoning}"
-        else:
-            msg = f"[Mafia Discussion] I'm not sure who to target. {reasoning}"
-        game_state.add_event("mafia_chat", msg, "mafia", player=mafia.name, priority=7)
+    if target:
+        msg = f"[Mafia Discussion] I think we should target {target}."
+    else:
+        msg = f"[Mafia Discussion] I'm not sure who to target."
+    game_state.add_event("mafia_chat", msg, "mafia", player=mafia.name, priority=7)
 
-    return {"player": mafia.name, "target": target, "reasoning": reasoning}
+    return {"player": mafia.name, "target": target}
 
 
 def _tally_mafia_votes(game_state: GameState):
@@ -1149,7 +1094,7 @@ def _execute_doctor_protect(
     )
     doctor.last_llm_context["response"] = response
 
-    target, reasoning = _parse_action_response(response)
+    target = _parse_action_response(response)
 
     # Check if same target as last night
     if target and doctor.role.last_protected == target:
@@ -1159,13 +1104,12 @@ def _execute_doctor_protect(
     else:
         if target:
             doctor.role.last_protected = target
-            monologue = f"[Doctor's Thoughts] I'll protect {target} tonight. {reasoning}"
+            monologue = f"[Doctor's Thoughts] I'll protect {target} tonight."
         else:
-            monologue = f"[Doctor's Thoughts] I'm choosing not to protect anyone. {reasoning}"
-        if reasoning:
-            game_state.add_event("role_action", monologue, "doctor", player=doctor.name, priority=6)
+            monologue = f"[Doctor's Thoughts] I'm choosing not to protect anyone."
+        game_state.add_event("role_action", monologue, "doctor", player=doctor.name, priority=6)
 
-    return {"target": target, "reasoning": reasoning}
+    return {"target": target}
 
 
 def _execute_sheriff_investigate(
@@ -1195,7 +1139,7 @@ def _execute_sheriff_investigate(
     )
     sheriff.last_llm_context["response"] = response
 
-    target, reasoning = _parse_action_response(response)
+    target = _parse_action_response(response)
 
     result = None
     if target:
@@ -1204,16 +1148,15 @@ def _execute_sheriff_investigate(
             result = "mafia" if target_player.team == "mafia" else "town"
             sheriff.role.investigations.append((target, result))
 
-            if reasoning:
-                game_state.add_event("role_action",
-                    f"[Sheriff's Thoughts] I'm investigating {target}. {reasoning}",
-                    "sheriff", player=sheriff.name, priority=6)
             game_state.add_event("role_action",
-                f"Investigation result: {target} is {result.upper()}.",
+                f"[Sheriff's Thoughts] I'm investigating {target}.",
+                "sheriff", player=sheriff.name, priority=6)
+            game_state.add_event("role_action",
+                f"Investigation result: {target} is {result.UPPER()}.",
                 "sheriff", player=sheriff.name, priority=8,
                 metadata={"target": target, "result": result})
 
-    return {"target": target, "result": result, "reasoning": reasoning}
+    return {"target": target, "result": result}
 
 
 def _execute_vigilante_kill(
@@ -1243,20 +1186,19 @@ def _execute_vigilante_kill(
     )
     vigilante.last_llm_context["response"] = response
 
-    target, reasoning = _parse_action_response(response)
+    target = _parse_action_response(response)
 
     if target:
         vigilante.role.bullet_used = True
-        if reasoning:
-            game_state.add_event("role_action",
-                f"[Vigilante's Thoughts] I'm using my bullet on {target}. {reasoning}",
-                "vigilante", player=vigilante.name, priority=6)
-    elif reasoning:
         game_state.add_event("role_action",
-            f"[Vigilante's Thoughts] I'm saving my bullet. {reasoning}",
+            f"[Vigilante's Thoughts] I'm using my bullet on {target}.",
+            "vigilante", player=vigilante.name, priority=6)
+    else:
+        game_state.add_event("role_action",
+            f"[Vigilante's Thoughts] I'm saving my bullet.",
             "vigilante", player=vigilante.name, priority=6)
 
-    return {"target": target, "reasoning": reasoning}
+    return {"target": target}
 
 
 def _resolve_night_actions(game_state: GameState):
@@ -1369,8 +1311,8 @@ def _poll_for_turn_actions(
 
             # Check for empty response - log warning but continue
             content = response.get("content", "")
-            # CRITICAL: Log if content is empty, regardless of structured_output
-            if not content:
+            # Only warn if BOTH content and structured_output are missing
+            if not content and "structured_output" not in response:
                 logging.warning(f"Empty result from turn_poll for {player.name} (model: {player.model})")
 
             # Parse response based on what's available
@@ -1619,12 +1561,8 @@ def _execute_day_vote(
         if explanation:
             msg += f" {explanation}"
 
-        # Extract reasoning from LLM response if available
-        reasoning = response.get("reasoning")
-
         game_state.add_event("vote", msg, "all", player=player.name, priority=8,
-                            metadata={"target": vote_target},
-                            reasoning=reasoning)
+                            metadata={"target": vote_target})
 
         return {"player": player.name, "vote": vote_target, "explanation": explanation}
 
@@ -1751,14 +1689,12 @@ def _strip_quotes(text: str) -> str:
     return text
 
 
-def _parse_action_response(response: Dict) -> tuple:
-    """Parse target and reasoning from an action response."""
+def _parse_action_response(response: Dict) -> str:
+    """Parse target from an action response."""
     target = None
-    reasoning = ""
 
     if "structured_output" in response:
         target = response["structured_output"].get("target")
-        reasoning = response["structured_output"].get("reasoning", "")
     else:
         try:
             content = response.get("content", "")
@@ -1766,11 +1702,10 @@ def _parse_action_response(response: Dict) -> tuple:
             if idx >= 0:
                 parsed = json.loads(content[idx:content.rfind("}")+1])
                 target = parsed.get("target")
-                reasoning = parsed.get("reasoning", "")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logging.error(f"JSON parse failed: {e}")
 
-    return target, reasoning
+    return target
 
 
 def _parse_target_response(response: Dict) -> str:
@@ -1844,7 +1779,7 @@ def _execute_mafia_vote_only(
     llm_client: OpenRouterClient,
     cancel_event
 ) -> str:
-    """Execute a mafia member's vote (target only, no reasoning)."""
+    """Execute a mafia member's vote."""
     alive_names = [p.name for p in game_state.get_alive_players()]
     prev = [{"player": v["player"], "target": v.get("target")} for v in previous_votes]
     discussion_messages = game_state.phase_data.get("mafia_discussion_messages", [])

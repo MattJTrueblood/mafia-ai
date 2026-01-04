@@ -46,7 +46,7 @@ class OpenRouterClient:
             cancel_event: Optional gevent.event.Event to check for cancellation
 
         Returns:
-            Dict with "content" and optionally "structured_output" and "reasoning"
+            Dict with "content" and optionally "structured_output"
 
         Raises:
             LLMCancelledException: If cancel_event is set during the call
@@ -92,30 +92,25 @@ class OpenRouterClient:
             "temperature": temperature,
         }
 
-        # Add reasoning config for reasoning models
+        # Disable reasoning for reasoning models
         if self._is_reasoning_model(model):
             # Different models use different reasoning parameter formats
             if "deepseek" in model.lower():
-                # DeepSeek: Control via max_tokens (total output limit)
+                # DeepSeek: Explicitly disable reasoning
                 payload["reasoning"] = {
-                    "enabled": True,
+                    "enabled": False,
                 }
-                # Set conservative total output limit if not already set
-                if max_tokens is None:
-                    payload["max_tokens"] = 4096  # Total: reasoning + answer
             elif "moonshotai" in model.lower() or "kimi" in model.lower():
-                # Kimi: Use effort level like other models (max_tokens may not work)
+                # Kimi: Built-in reasoning can't be disabled - omit config
+                pass
+            elif "gemini" in model.lower() or "google" in model.lower():
+                # Gemini: Built-in thinking can't be disabled - omit config
+                pass
+            else:
+                # OpenAI (GPT-5, o1, o3), Anthropic, Grok: Exclude reasoning tokens
                 payload["reasoning"] = {
                     "effort": "low",
-                    "exclude": False,
-                    "summary": "auto",
-                }
-            else:
-                # OpenAI (GPT-5, o1, o3) and Grok models use effort parameter
-                payload["reasoning"] = {
-                    "effort": "low",  # 20% allocation - "minimal" not supported by GPT-5.x
-                    "exclude": False,
-                    "summary": "auto",  # Request reasoning summaries in plaintext
+                    "exclude": True,  # Exclude reasoning from response
                 }
 
         if response_format:
@@ -124,11 +119,8 @@ class OpenRouterClient:
         # Note: max_tokens intentionally not set to prevent output truncation
         # Token usage is controlled through prompting instead
 
-        # Debug logging - log full payload for reasoning models
-        if self._is_reasoning_model(model):
-            logging.info(f"Chat API request (reasoning model): model={model}, payload_keys={list(payload.keys())}, reasoning_config={payload.get('reasoning')}")
-        else:
-            logging.info(f"Chat API request: model={model}, messages_count={len(messages)}, has_response_format={response_format is not None}")
+        # Debug logging
+        logging.info(f"Chat API request: model={model}, messages_count={len(messages)}, has_response_format={response_format is not None}, payload_keys={list(payload.keys())}")
 
         # Retry logic
         for attempt in range(self.max_retries):
@@ -185,19 +177,13 @@ class OpenRouterClient:
                 message = data["choices"][0]["message"]
                 content = message.get("content") or ""
 
-                # Extract reasoning
-                reasoning = self._extract_reasoning(message)
-
-                # Log what we extracted for diagnosis
-                if reasoning:
-                    logging.info(f"Extracted reasoning from {model} ({len(reasoning)} chars):\n{reasoning}")
-
                 # Log token usage for cost monitoring
                 if "usage" in data:
                     usage = data["usage"]
                     total_tokens = usage.get("total_tokens", 0)
-                    prompt_tokens = usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("completion_tokens", 0)
+                    # Responses API uses input_tokens/output_tokens, Chat API uses prompt_tokens/completion_tokens
+                    prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens", 0)
                     logging.info(f"Token usage for {model}: {total_tokens} total ({prompt_tokens} prompt + {completion_tokens} completion)")
 
                 # Warn if content is empty
@@ -205,10 +191,6 @@ class OpenRouterClient:
                     logging.warning(f"Empty response from model {model}")
 
                 result = {"content": content}
-
-                # Store reasoning separately if it exists
-                if reasoning:
-                    result["reasoning"] = reasoning
 
                 # Extract structured output
                 if "structured_outputs" in message:
@@ -268,30 +250,25 @@ class OpenRouterClient:
         # Debug logging - log the full payload
         logging.info(f"Responses API payload: {json.dumps(payload, indent=2)}")
 
-        # Add reasoning config for reasoning models
+        # Disable reasoning for reasoning models
         if self._is_reasoning_model(model):
             # Different models use different reasoning parameter formats
             if "deepseek" in model.lower():
-                # DeepSeek: Control via max_tokens (total output limit)
+                # DeepSeek: Explicitly disable reasoning
                 payload["reasoning"] = {
-                    "enabled": True,
+                    "enabled": False,
                 }
-                # Set conservative total output limit if not already set
-                if max_tokens is None:
-                    payload["max_tokens"] = 4096  # Total: reasoning + answer
             elif "moonshotai" in model.lower() or "kimi" in model.lower():
-                # Kimi: Use effort level like other models (max_tokens may not work)
+                # Kimi: Built-in reasoning can't be disabled - omit config
+                pass
+            elif "gemini" in model.lower() or "google" in model.lower():
+                # Gemini: Built-in thinking can't be disabled - omit config
+                pass
+            else:
+                # OpenAI (GPT-5, o1, o3), Anthropic, Grok: Exclude reasoning tokens
                 payload["reasoning"] = {
                     "effort": "low",
-                    "exclude": False,
-                    "summary": "auto",
-                }
-            else:
-                # OpenAI (GPT-5, o1, o3) and Grok models use effort parameter
-                payload["reasoning"] = {
-                    "effort": "low",  # 20% allocation - "minimal" not supported by GPT-5.x
-                    "exclude": False,
-                    "summary": "auto",  # Request reasoning summaries in plaintext
+                    "exclude": True,  # Exclude reasoning from response
                 }
 
         # Note: max_tokens intentionally not set to prevent output truncation
@@ -374,40 +351,13 @@ class OpenRouterClient:
                             if "structured_output" in result:
                                 break
 
-                # Extract reasoning from output array
-                # Some models expose summary, others expose full reasoning content
-                reasoning_parts = []
-                for item in output:
-                    if item.get("type") == "reasoning":
-                        logging.debug(f"Found reasoning item in output for {model}")
-                        # Check summary array first (summary tokens)
-                        summary = item.get("summary", [])
-                        for summary_item in summary:
-                            if summary_item.get("type") == "summary_text":
-                                reasoning_parts.append(summary_item.get("text", ""))
-
-                        # Also check content array (full reasoning tokens)
-                        content_array = item.get("content", [])
-                        logging.debug(f"Reasoning content array has {len(content_array)} items")
-                        for content_item in content_array:
-                            if content_item.get("type") == "reasoning_text":
-                                text = content_item.get("text", "")
-                                logging.debug(f"Extracting reasoning text ({len(text)} chars)")
-                                reasoning_parts.append(text)
-
-                logging.debug(f"Total reasoning parts extracted: {len(reasoning_parts)}")
-                if reasoning_parts:
-                    result["reasoning"] = "\n\n".join(reasoning_parts)
-                    logging.info(f"Extracted reasoning from {model} ({len(result['reasoning'])} chars) via Responses API")
-                else:
-                    logging.debug(f"No reasoning parts found for {model} in Responses API")
-
                 # Log token usage for cost monitoring
                 if "usage" in data:
                     usage = data["usage"]
                     total_tokens = usage.get("total_tokens", 0)
-                    prompt_tokens = usage.get("prompt_tokens", 0)
-                    completion_tokens = usage.get("completion_tokens", 0)
+                    # Responses API uses input_tokens/output_tokens, Chat API uses prompt_tokens/completion_tokens
+                    prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens", 0)
                     logging.info(f"Token usage for {model}: {total_tokens} total ({prompt_tokens} prompt + {completion_tokens} completion)")
 
                 return result
@@ -464,27 +414,6 @@ class OpenRouterClient:
             "description": f"Provide structured response as {name}",
             "parameters": actual_schema
         }
-
-    def _extract_reasoning(self, message: dict) -> Optional[str]:
-        """Extract reasoning from message if present."""
-        # Modern format: reasoning_details array
-        if "reasoning_details" in message and message["reasoning_details"]:
-            parts = []
-            for detail in message["reasoning_details"]:
-                if detail.get("type") == "reasoning.summary":
-                    summary_text = detail['summary']
-                    parts.append(f"[Summary] {summary_text}")
-                    logging.info(f"Reasoning summary: {summary_text}")
-                elif detail.get("text"):
-                    parts.append(detail["text"])
-            if parts:
-                return "\n\n".join(parts)
-
-        # Legacy format: direct reasoning field
-        if "reasoning" in message and message["reasoning"]:
-            return message["reasoning"]
-
-        return None
 
     def _messages_to_input(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
         """Convert Chat API messages format to Responses API input format.

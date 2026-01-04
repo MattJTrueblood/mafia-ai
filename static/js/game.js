@@ -444,11 +444,6 @@ function createEventElement(event, playerMap) {
         }
         content += `<span class="event-message">${escapeHtml(event.message)}</span>`;
 
-        // Add reasoning icon if reasoning exists
-        if (event.reasoning) {
-            content += `<span class="reasoning-icon" title="View reasoning">💭</span>`;
-        }
-
         if (event.visibility !== 'all' && event.visibility !== 'public') {
             content += `<span class="visibility-badge">${getVisibilityLabel(event.visibility)}</span>`;
         }
@@ -458,17 +453,6 @@ function createEventElement(event, playerMap) {
     }
 
     div.innerHTML = content;
-
-    // Add click handler for reasoning icon
-    if (event.reasoning) {
-        const reasoningIcon = div.querySelector('.reasoning-icon');
-        if (reasoningIcon) {
-            reasoningIcon.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showReasoningModal(event.reasoning, event.player, event.type);
-            });
-        }
-    }
 
     return div;
 }
@@ -639,26 +623,6 @@ function closeContextModal() {
         copyBtn.textContent = 'Copy to Clipboard';
         copyBtn.classList.remove('copied');
     }
-}
-
-function showReasoningModal(reasoning, playerName, eventType) {
-    // Populate modal with reasoning data
-    document.getElementById('modal-player-name').textContent = playerName;
-
-    // Set event type and clear other metadata
-    const typeLabel = eventType.replace('_', ' ').toUpperCase();
-    document.getElementById('modal-action-type').textContent = typeLabel;
-    document.getElementById('modal-phase').textContent = '-';
-    document.getElementById('modal-day').textContent = '-';
-    document.getElementById('modal-timestamp').textContent = '-';
-    document.getElementById('modal-tokens').textContent = '-';
-
-    // Set section title and display reasoning
-    document.getElementById('modal-section-title').textContent = 'Model Reasoning';
-    document.getElementById('modal-content-text').textContent = reasoning;
-
-    // Show modal
-    document.getElementById('context-modal').classList.add('active');
 }
 
 function copyContext() {

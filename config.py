@@ -33,7 +33,7 @@ DEFAULT_MODELS = [
     "google/gemini-2.5-pro",           # More capable Gemini
     # Tier 3: Budget/experimental options
     "meta-llama/llama-4-maverick",     # Decent mid-tier
-    "moonshotai/kimi-k2-thinking",     # Complex reasoning specialist
+    "moonshotai/kimi-k2-0905",         # Fast Kimi without reasoning overhead
     "anthropic/claude-opus-4.5",       # Premium reasoning (expensive)
     "mistralai/mistral-large-2512",    # Enterprise option
 ]
@@ -51,7 +51,7 @@ TOOL_MODELS = [
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "meta-llama/llama-4-maverick",
-    "moonshotai/kimi-k2-thinking",
+    "moonshotai/kimi-k2-0905",
     "mistralai/mistral-large-2512",
 ]
 
@@ -65,7 +65,6 @@ REASONING_MODELS = [
     "x-ai/grok-4.1-fast",              # Enable/disable reasoning
     "google/gemini-2.5-pro",           # Built-in "thinking" capabilities
     "google/gemini-2.5-flash",         # Built-in "thinking" capabilities
-    "moonshotai/kimi-k2-thinking",     # Persistent step-by-step reasoning
 ]
 
 # Model pricing dictionary (per 1M tokens: input / output)
@@ -78,7 +77,7 @@ MODEL_PRICING = {
     "x-ai/grok-4.1-fast": {"input": 0.20, "output": 0.50},
     "deepseek/deepseek-v3.2": {"input": 0.25, "output": 0.38},
     "google/gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-    "moonshotai/kimi-k2-thinking": {"input": 0.40, "output": 1.75},
+    "moonshotai/kimi-k2-0905": {"input": 0.39, "output": 1.90},
     "mistralai/mistral-large-2512": {"input": 0.50, "output": 1.50},
     # Mid tier ($1-3 per 1M input)
     "google/gemini-2.5-pro": {"input": 1.25, "output": 10.00},
