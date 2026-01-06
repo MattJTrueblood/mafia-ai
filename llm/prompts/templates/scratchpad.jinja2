@@ -1,0 +1,41 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+STRATEGIC SCRATCHPAD ({{ timing_title }}):
+{{ timing_description }}
+
+Take a moment to write strategic notes for yourself.
+These notes are completely PRIVATE - only you will see them.
+Your previous notes are shown in the "YOUR SCRATCHPAD" section above.
+
+What to consider:
+- Your win condition and what you need to achieve it
+- Suspicions about other players (who might be mafia/town)
+- Your reads on recent events and discussions
+{% if timing == "pre_vote" -%}
+- Who you're planning to vote for and why
+{% elif timing == "night_start" -%}
+- Your planned night action (if applicable)
+{% endif -%}
+
+Guidelines:
+- Keep it brief: 1-2 paragraphs, preferably one
+- Write in natural language (no specific format required)
+- Focus on your thinking, not just facts you already know
+
+Output format: plain text (no JSON)
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

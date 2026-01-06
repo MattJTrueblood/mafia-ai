@@ -171,7 +171,33 @@ def process_step(
         game_state.add_event("system", "Mafia night actions begin.", "mafia")
         emit_update()
 
-        # Advance to mafia discussion
+        # Advance to night scratchpad (special roles only)
+        game_state.current_step = GameState.STEP_SCRATCHPAD_NIGHT_START
+        game_state.step_index = 0
+        return StepResult()
+
+    elif step == GameState.STEP_SCRATCHPAD_NIGHT_START:
+        alive_players = game_state.get_alive_players()
+
+        # Filter to only special roles
+        eligible_players = [p for p in alive_players if _should_write_night_scratchpad(p)]
+
+        if eligible_players:
+            def scratchpad_func(player):
+                return _execute_scratchpad_writing(
+                    game_state, player, "night_start",
+                    llm_client, cancel_event, emit_player_status
+                )
+
+            _execute_parallel_votes(
+                eligible_players, scratchpad_func, emit_update,
+                game_state, cancel_event
+            )
+
+        # Don't add event (night is silent)
+        emit_update()
+
+        # Move to mafia discussion
         game_state.current_step = GameState.STEP_MAFIA_DISCUSSION
         game_state.step_index = 0
         return StepResult()
@@ -484,10 +510,41 @@ def process_step(
             emit_update()
             emit_status("discussion_start", message_count=0, max_messages=10)
 
-            # Move to discussion polling
+            # Move to scratchpad writing (Day 2+)
+            game_state.current_step = GameState.STEP_SCRATCHPAD_DAY_START
+            game_state.step_index = 0
+            return StepResult()
+
+    elif step == GameState.STEP_SCRATCHPAD_DAY_START:
+        # Skip scratchpad on Day 1 (introduction day, no strategic context yet)
+        if game_state.day_number == 1:
             game_state.current_step = GameState.STEP_DISCUSSION_POLL
             game_state.step_index = 0
             return StepResult()
+
+        alive_players = game_state.get_alive_players()
+
+        # Define scratchpad function for parallel execution
+        def scratchpad_func(player):
+            return _execute_scratchpad_writing(
+                game_state, player, "day_start",
+                llm_client, cancel_event, emit_player_status
+            )
+
+        # Execute in parallel for all alive players
+        _execute_parallel_votes(
+            alive_players, scratchpad_func, emit_update,
+            game_state, cancel_event
+        )
+
+        # Add event (private, no content logged)
+        game_state.add_event("system", "Players wrote strategic notes.", "all")
+        emit_update()
+
+        # Move to discussion polling
+        game_state.current_step = GameState.STEP_DISCUSSION_POLL
+        game_state.step_index = 0
+        return StepResult()
 
     elif step == GameState.STEP_INTRODUCTION_MESSAGE:
         # Simple round-robin introductions for Day 1
@@ -548,11 +605,10 @@ def process_step(
 
         if len(messages) >= max_messages:
             # Max messages reached - end discussion
-            logging.info(f"[POLL] Max messages reached, moving to voting")
+            logging.info(f"[POLL] Max messages reached, moving to pre-vote scratchpad")
             emit_status("discussion_end")
             game_state.add_event("system", f"Day {game_state.day_number} discussion phase ends.", "all")
-            emit_status("turn_polling", waiting_player=None)
-            game_state.current_step = GameState.STEP_VOTING
+            game_state.current_step = GameState.STEP_SCRATCHPAD_PRE_VOTE
             game_state.step_index = 0
             emit_update()
             return StepResult()
@@ -688,6 +744,29 @@ def process_step(
         logging.info(f"[POLL] Moving to DISCUSSION_MESSAGE step for speaker: {game_state.phase_data.get('next_speaker')}")
         game_state.current_step = GameState.STEP_DISCUSSION_MESSAGE
         game_state.step_index = len(messages)
+        return StepResult()
+
+    elif step == GameState.STEP_SCRATCHPAD_PRE_VOTE:
+        alive_players = game_state.get_alive_players()
+
+        def scratchpad_func(player):
+            return _execute_scratchpad_writing(
+                game_state, player, "pre_vote",
+                llm_client, cancel_event, emit_player_status
+            )
+
+        _execute_parallel_votes(
+            alive_players, scratchpad_func, emit_update,
+            game_state, cancel_event
+        )
+
+        game_state.add_event("system", "Players wrote strategic notes.", "all")
+        emit_status("turn_polling", waiting_player=None)
+        emit_update()
+
+        # Move to voting
+        game_state.current_step = GameState.STEP_VOTING
+        game_state.step_index = 0
         return StepResult()
 
     elif step == GameState.STEP_DISCUSSION_MESSAGE:
@@ -1702,6 +1781,14 @@ def _strip_player_name_prefix(text: str, player_name: str) -> str:
     return text
 
 
+def _should_write_night_scratchpad(player):
+    """Determine if player should write scratchpad at night start."""
+    if not player.alive:
+        return False
+    role_name = player.role.name if player.role else None
+    return role_name in ["Doctor", "Sheriff", "Vigilante", "Mafia"]
+
+
 def _parse_action_response(response: Dict) -> str:
     """Parse target from an action response."""
     target = None
@@ -1867,6 +1954,61 @@ def _execute_role_discussion(
         content = _strip_quotes(content)
         content = _strip_player_name_prefix(content, player.name)
         return content[:1000] if content else "No comment."
+    finally:
+        # Emit complete status
+        if emit_player_status:
+            emit_player_status(player.name, "complete")
+
+
+def _execute_scratchpad_writing(
+    game_state: GameState,
+    player,
+    timing: str,
+    llm_client: OpenRouterClient,
+    cancel_event,
+    emit_player_status = None
+) -> str:
+    """Execute scratchpad writing for a single player."""
+    from llm.prompts import build_scratchpad_prompt
+
+    prompt = build_scratchpad_prompt(game_state, player, timing)
+    messages = [{"role": "user", "content": prompt}]
+
+    # Emit pending status
+    if emit_player_status:
+        emit_player_status(player.name, "pending")
+
+    try:
+        player.last_llm_context = {
+            "messages": messages,
+            "timestamp": datetime.now().isoformat(),
+            "action_type": f"scratchpad_{timing}",
+            "phase": game_state.phase,
+            "day": game_state.day_number
+        }
+
+        response = llm_client.call_model(
+            player.model, messages,
+            temperature=0.7,
+            cancel_event=cancel_event
+        )
+        player.last_llm_context["response"] = response
+
+        note = response.get("content", "").strip()
+        note = _strip_quotes(note)
+        note = _strip_player_name_prefix(note, player.name)
+
+        # Store in player's scratchpad
+        if note:
+            player.scratchpad.append({
+                "day": game_state.day_number,
+                "phase": game_state.phase,
+                "timing": timing,
+                "note": note,
+                "timestamp": datetime.now().isoformat()
+            })
+
+        return note
     finally:
         # Emit complete status
         if emit_player_status:

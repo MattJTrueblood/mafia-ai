@@ -28,7 +28,6 @@ DEFAULT_MODELS = [
     "openai/gpt-4o",                   # Proven reliable
     "google/gemini-2.5-flash",         # Fast and affordable
     "google/gemini-2.5-pro",           # More capable Gemini
-    "meta-llama/llama-4-maverick",     # Decent mid-tier
     "moonshotai/kimi-k2-0905",         # Fast Kimi without reasoning overhead
     #"anthropic/claude-opus-4.5",       # Premium reasoning (expensive)
     "mistralai/mistral-large-2512",    # Enterprise option
@@ -44,7 +43,6 @@ TOOL_MODELS = [
     "deepseek/deepseek-v3.2",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
-    "meta-llama/llama-4-maverick",
     "moonshotai/kimi-k2-0905",
     "mistralai/mistral-large-2512",
 ]
@@ -55,7 +53,6 @@ TOOL_MODELS = [
 # Verified via OpenRouter API 2025-12-31
 MODEL_PRICING = {
     # Budget tier (< $1 per 1M input)
-    "meta-llama/llama-4-maverick": {"input": 0.15, "output": 0.60},
     "x-ai/grok-4.1-fast": {"input": 0.20, "output": 0.50},
     "deepseek/deepseek-v3.2": {"input": 0.25, "output": 0.38},
     "google/gemini-2.5-flash": {"input": 0.30, "output": 2.50},

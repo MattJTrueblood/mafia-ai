@@ -140,6 +140,7 @@ function updatePlayers(players) {
 
         const roleDisplay = player.role || 'Unknown';
         const hasContext = player.has_context;
+        const hasScratchpad = player.has_scratchpad;
 
         // Build indicator HTML
         let indicatorHtml = '';
@@ -162,6 +163,12 @@ function updatePlayers(players) {
                     ${hasContext ? '' : 'disabled'}
                     title="${hasContext ? 'View LLM context' : 'No context available yet'}">
                 Context
+            </button>
+            <button class="btn-scratchpad"
+                    onclick="showPlayerScratchpad('${escapeHtml(player.name).replace(/'/g, "\\'")}')"
+                    ${hasScratchpad ? '' : 'disabled'}
+                    title="${hasScratchpad ? 'View scratchpad' : 'No scratchpad notes yet'}">
+                Scratchpad
             </button>
         `;
 
@@ -655,6 +662,45 @@ ${prompt}
     }).catch(err => {
         alert('Failed to copy: ' + err);
     });
+}
+
+// Scratchpad modal functions
+async function showPlayerScratchpad(playerName) {
+    if (!currentGameId) return;
+
+    try {
+        const response = await fetch(`/game/${currentGameId}/player/${encodeURIComponent(playerName)}/scratchpad`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert('Error: ' + (data.error || 'Failed to load scratchpad'));
+            return;
+        }
+
+        // Populate modal
+        document.getElementById('scratchpad-player-name').textContent = data.player_name;
+        document.getElementById('scratchpad-day').textContent = data.note.day || 'unknown';
+        document.getElementById('scratchpad-phase').textContent = data.note.phase || 'unknown';
+
+        const timingLabels = {
+            "day_start": "Day Start",
+            "pre_vote": "Pre-Vote",
+            "night_start": "Night Start"
+        };
+        document.getElementById('scratchpad-timing').textContent = timingLabels[data.note.timing] || data.note.timing;
+        document.getElementById('scratchpad-timestamp').textContent = formatTimestamp(data.note.timestamp);
+        document.getElementById('scratchpad-note').textContent = data.note.note;
+
+        // Show modal
+        document.getElementById('scratchpad-modal').classList.add('active');
+
+    } catch (error) {
+        alert('Error loading scratchpad: ' + error.message);
+    }
+}
+
+function closeScratchpadModal() {
+    document.getElementById('scratchpad-modal').classList.remove('active');
 }
 
 function formatTimestamp(isoString) {

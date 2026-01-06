@@ -379,3 +379,42 @@ def build_introduction_prompt(game_state, player) -> str:
         phase='introduction'
     )
     return get_template_manager().render('day/introduction.jinja2', context)
+
+
+def build_scratchpad_prompt(game_state, player, timing: str) -> str:
+    """Build prompt for scratchpad strategic note writing.
+
+    Args:
+        game_state: Current game state
+        player: The player writing notes
+        timing: "day_start", "pre_vote", or "night_start"
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    # Timing-specific context
+    timing_context = {
+        "day_start": {
+            "title": f"Day {game_state.day_number} Start",
+            "description": "You're at the beginning of the day, before discussion starts."
+        },
+        "pre_vote": {
+            "title": f"Day {game_state.day_number} Pre-Vote",
+            "description": "Discussion has ended. You're about to vote on who to lynch."
+        },
+        "night_start": {
+            "title": f"Night {game_state.day_number} Start",
+            "description": "Night has begun. You'll soon take your night action."
+        }
+    }
+
+    context = builder.build_context(
+        player=player,
+        phase='scratchpad',
+        timing=timing,
+        timing_title=timing_context[timing]["title"],
+        timing_description=timing_context[timing]["description"]
+    )
+    return get_template_manager().render('scratchpad.jinja2', context)

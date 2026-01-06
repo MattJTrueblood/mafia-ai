@@ -92,6 +92,31 @@
         </div>
     </div>
 
+    <!-- Scratchpad Modal -->
+    <div id="scratchpad-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Scratchpad - <span id="scratchpad-player-name"></span></h3>
+                <button class="modal-close" onclick="closeScratchpadModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="context-meta">
+                    <span>Day: <strong id="scratchpad-day"></strong></span>
+                    <span>Phase: <strong id="scratchpad-phase"></strong></span>
+                    <span>Timing: <strong id="scratchpad-timing"></strong></span>
+                    <span>Time: <strong id="scratchpad-timestamp"></strong></span>
+                </div>
+                <div class="context-section">
+                    <h4>Strategic Notes</h4>
+                    <div id="scratchpad-note" class="context-content" style="white-space: pre-wrap;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeScratchpadModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/game.js') }}"></script>
     <script>

@@ -250,6 +250,29 @@ def get_player_context(game_id, player_name):
     })
 
 
+@app.route("/game/<game_id>/player/<player_name>/scratchpad")
+def get_player_scratchpad(game_id, player_name):
+    """Get the most recent scratchpad note for a player."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    game_state = games[game_id]
+    player = game_state.get_player_by_name(player_name)
+
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    if not hasattr(player, 'scratchpad') or not player.scratchpad:
+        return jsonify({"error": "No scratchpad notes yet"}), 404
+
+    # Return the most recent scratchpad note
+    latest_note = player.scratchpad[-1]
+    return jsonify({
+        "player_name": player_name,
+        "note": latest_note
+    })
+
+
 @app.route("/game/<game_id>/start", methods=["POST"])
 def start_game_loop(game_id):
     """Start the continuous game loop."""

@@ -16,6 +16,7 @@ class Player:
         self.alive = True
         self.team = role.team if role else None
         self.last_llm_context = None  # Stores most recent LLM prompt/response for debugging
+        self.scratchpad = []  # Private strategic notes written at key decision points
 
     def __repr__(self):
         status = "alive" if self.alive else "dead"
@@ -34,6 +35,7 @@ class GameState:
 
     # Step constants for night phase
     STEP_NIGHT_START = "night_start"
+    STEP_SCRATCHPAD_NIGHT_START = "scratchpad_night_start"  # Special role players write strategic notes
     STEP_MAFIA_DISCUSSION = "mafia_discussion"  # Mafia discuss before voting
     STEP_MAFIA_VOTE = "mafia_vote"  # Followed by index: mafia_vote:0, mafia_vote:1, etc.
     STEP_DOCTOR_DISCUSS = "doctor_discuss"  # Doctor thinks through options
@@ -46,9 +48,11 @@ class GameState:
 
     # Step constants for day phase
     STEP_DAY_START = "day_start"
+    STEP_SCRATCHPAD_DAY_START = "scratchpad_day_start"  # Players write strategic notes at day start
     STEP_INTRODUCTION_MESSAGE = "introduction_message"  # Day 1 only: simple round-robin introductions
     STEP_DISCUSSION_POLL = "discussion_poll"  # Followed by round: discussion_poll:0
     STEP_DISCUSSION_MESSAGE = "discussion_message"  # discussion_message:player_name
+    STEP_SCRATCHPAD_PRE_VOTE = "scratchpad_pre_vote"  # Players write strategic notes before voting
     STEP_VOTING = "voting"  # voting:0, voting:1, etc.
     STEP_VOTING_RESOLVE = "voting_resolve"
 
@@ -279,7 +283,8 @@ class GameState:
                     "role": p.role.name if p.role else None,
                     "alive": p.alive,
                     "team": p.team,
-                    "has_context": p.last_llm_context is not None
+                    "has_context": p.last_llm_context is not None,
+                    "has_scratchpad": hasattr(p, 'scratchpad') and len(p.scratchpad) > 0
                 }
                 for p in self.players
             ],

@@ -612,6 +612,25 @@ button {
     cursor: not-allowed;
 }
 
+/* Scratchpad button in player card */
+.btn-scratchpad {
+    background-color: #3b7d9e;
+    color: #e0e0e0;
+    padding: 4px 8px;
+    font-size: 0.75em;
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+.btn-scratchpad:hover {
+    background-color: #4a9bc4;
+}
+
+.btn-scratchpad:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .btn-copy {
     background-color: #3498db;
     color: white;
