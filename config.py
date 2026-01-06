@@ -20,32 +20,26 @@ def load_openrouter_key():
 DEFAULT_PLAYER_COUNT = 7
 
 # Default models - vetted for reliable tool calling performance
-# Tier 1: Production-ready, best tool calling benchmarks
 DEFAULT_MODELS = [
     "x-ai/grok-4.1-fast",              # Best BFCL v4 score, great value
-    "anthropic/claude-sonnet-4.5",     # Strong agentic capabilities
+    #"anthropic/claude-sonnet-4.5",     # Strong agentic capabilities
     "openai/gpt-5.2",                  # Premium flagship
-    "openai/gpt-5.1",                  # Flagship predecessor
-    # Tier 2: Good balance of performance and cost
     "deepseek/deepseek-v3.2",          # Excellent value with reasoning
     "openai/gpt-4o",                   # Proven reliable
     "google/gemini-2.5-flash",         # Fast and affordable
     "google/gemini-2.5-pro",           # More capable Gemini
-    # Tier 3: Budget/experimental options
     "meta-llama/llama-4-maverick",     # Decent mid-tier
     "moonshotai/kimi-k2-0905",         # Fast Kimi without reasoning overhead
-    "anthropic/claude-opus-4.5",       # Premium reasoning (expensive)
+    #"anthropic/claude-opus-4.5",       # Premium reasoning (expensive)
     "mistralai/mistral-large-2512",    # Enterprise option
 ]
 
 # Models that support tool calling (use Responses API)
-# ALL vetted models support tools!
 TOOL_MODELS = [
     "x-ai/grok-4.1-fast",
     "anthropic/claude-sonnet-4.5",
     "anthropic/claude-opus-4.5",
     "openai/gpt-5.2",
-    "openai/gpt-5.1",
     "openai/gpt-4o",
     "deepseek/deepseek-v3.2",
     "google/gemini-2.5-flash",
@@ -69,7 +63,6 @@ MODEL_PRICING = {
     "mistralai/mistral-large-2512": {"input": 0.50, "output": 1.50},
     # Mid tier ($1-3 per 1M input)
     "google/gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "openai/gpt-5.1": {"input": 1.25, "output": 10.00},
     "openai/gpt-5.2": {"input": 1.75, "output": 14.00},
     "openai/gpt-4o": {"input": 2.50, "output": 10.00},
     "anthropic/claude-sonnet-4.5": {"input": 3.00, "output": 15.00},

@@ -1,0 +1,33 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+{% if previous_messages %}
+PREVIOUS DISCUSSION:
+{% for msg in previous_messages %}
+- {{ msg.player }}: {{ msg.message }}
+{% endfor %}
+
+{% endif %}
+MAFIA DISCUSSION:
+This is the mafia discussion phase. You're talking privately with your fellow mafia about who to kill tonight.
+
+Alive players who could be targeted: {{ available_targets | join(', ') }}
+
+Share your thoughts concisely (2-3 sentences max). State your opinion clearly.
+
+Output: plain text (no JSON)
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

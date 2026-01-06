@@ -1,0 +1,34 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+{% if is_interrupt %}
+INTERRUPT MODE:
+You indicated you have urgent information that cannot wait.
+Be direct and concise.
+{% elif is_respond %}
+RESPOND MODE:
+You were mentioned and are responding.
+Add something new - never use this to repeat a point you've already heard.
+{% endif %}
+
+DAY DISCUSSION:
+It's your turn to speak during the day discussion phase.
+Everything you say here is public;  all players will be able to see what you say.
+
+Output format: plain text (no JSON)
+Keep it brief: 1-2 sentences maximum.
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

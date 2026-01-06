@@ -1,0 +1,30 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+{% if constraint_message %}
+{{ constraint_message }}
+
+{% endif %}
+ROLE THINKING PHASE:
+Think through {{ action_description }}.
+
+Alive players: {{ available_targets | join(', ') }}
+
+Consider your options briefly (2-3 sentences max).
+
+Output: plain text (no JSON)
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

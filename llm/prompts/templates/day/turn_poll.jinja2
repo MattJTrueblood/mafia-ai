@@ -1,0 +1,34 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+TURN POLLING:
+Another player is about to speak. Do you need to interrupt or respond?
+
+INTERRUPT: Only if you have URGENT information (role reveal, defending yourself RIGHT NOW, critical info that changes everything).
+RESPOND: Only if you were explicitly mentioned by name AND you have something NEW to say (not just repeating yourself).
+PASS: Skip your speaking turn this round.
+WAIT: Take no action, wait for your normal turn.
+
+Output format (JSON):
+{
+  "wants_to_interrupt": true/false,
+  "wants_to_respond": true/false,
+  "wants_to_pass": true/false
+}
+
+Default: all false (wait for your turn).
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

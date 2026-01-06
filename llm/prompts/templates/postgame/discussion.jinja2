@@ -1,0 +1,36 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+The game is over. {{ winner }} wins!
+
+ROLE REVEAL:
+{% for p in all_players %}
+- {{ p.name }}: {{ p.role_text }} ({{ p.status }})
+{% endfor %}
+
+=== START PHASE INSTRUCTIONS ===
+
+POSTGAME DISCUSSION:
+All roles are revealed. Speak freely about the game.
+
+This phase is raw, hostile trash talk.
+Brag if you won. Cope or blame if you lost. Flame teammates who failed. Mock opponents’ mistakes. Justify your own plays.
+Be specific and opinionated: reference concrete moments from this game (votes, kills, claims, protects, shots, mislynches, bussing, endgame calls).
+
+Constraints:
+- 1–3 sentences.
+- Conversational, direct.
+- Plain text only (no JSON).
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

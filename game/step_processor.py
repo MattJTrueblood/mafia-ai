@@ -1492,6 +1492,8 @@ def _get_discussion_message(
 
         # Strip surrounding quotes if present
         content = _strip_quotes(content)
+        # Strip player name prefix if present
+        content = _strip_player_name_prefix(content, player.name)
         return content[:500] if content else None
 
     except LLMCancelledException:
@@ -1689,6 +1691,17 @@ def _strip_quotes(text: str) -> str:
     return text
 
 
+def _strip_player_name_prefix(text: str, player_name: str) -> str:
+    """Strip player name prefix from text if present (e.g., 'Frank: message')."""
+    if not text or not player_name:
+        return text
+    text = text.strip()
+    prefix = f"{player_name}:"
+    if text.startswith(prefix):
+        text = text[len(prefix):].strip()
+    return text
+
+
 def _parse_action_response(response: Dict) -> str:
     """Parse target from an action response."""
     target = None
@@ -1714,6 +1727,7 @@ def _parse_target_response(response: Dict) -> str:
 
     if "structured_output" in response:
         target = response["structured_output"].get("target")
+        logging.info(f"Parsed target from structured_output: {repr(target)}")
     else:
         try:
             content = response.get("content", "")
@@ -1721,8 +1735,11 @@ def _parse_target_response(response: Dict) -> str:
             if idx >= 0:
                 parsed = json.loads(content[idx:content.rfind("}")+1])
                 target = parsed.get("target")
+                logging.info(f"Parsed target from content JSON: {repr(target)}")
+            else:
+                logging.warning(f"No JSON found in response content: {content[:200]}")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logging.error(f"JSON parse failed: {e}")
+            logging.error(f"JSON parse failed: {e}. Content: {response.get('content', '')[:200]}")
 
     return target
 
@@ -1765,6 +1782,7 @@ def _execute_mafia_discussion(
 
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
+        content = _strip_player_name_prefix(content, mafia.name)
         return content[:1000] if content else "No comment."
     finally:
         # Emit complete status
@@ -1847,6 +1865,7 @@ def _execute_role_discussion(
 
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
+        content = _strip_player_name_prefix(content, player.name)
         return content[:1000] if content else "No comment."
     finally:
         # Emit complete status
@@ -1893,9 +1912,20 @@ def _execute_role_action(
 
         # Validate target
         if target and target not in alive_names:
+            logging.warning(f"{role_type.capitalize()} {player.name} selected invalid target: {target}. Available: {alive_names}")
+            logging.warning(f"Raw LLM response: {response}")
             target = None
 
+        if not target:
+            logging.warning(f"{role_type.capitalize()} {player.name} did not select a valid target")
+            logging.warning(f"Parsed target value: {repr(target)}")
+            logging.warning(f"Available targets: {alive_names}")
+            logging.warning(f"Raw LLM response: {response}")
+
         return target
+    except Exception as e:
+        logging.error(f"Error executing {role_type} action for {player.name}: {e}", exc_info=True)
+        return None
     finally:
         # Emit complete status
         if emit_player_status:
@@ -1938,6 +1968,7 @@ def _execute_sheriff_post_investigation(
         content = response.get("content", "").strip()
         # Strip surrounding quotes if present
         content = _strip_quotes(content)
+        content = _strip_player_name_prefix(content, sheriff.name)
         return content[:800] if content else None
     except Exception as e:
         log_exception(e, "Sheriff post-investigation failed", player_name=sheriff.name)
@@ -1981,6 +2012,7 @@ def _execute_postgame_discussion(
 
         content = response.get("content", "").strip()
         content = _strip_quotes(content)
+        content = _strip_player_name_prefix(content, player.name)
         return content[:500] if content else None
     except Exception as e:
         log_exception(e, "Postgame discussion failed", player_name=player.name)

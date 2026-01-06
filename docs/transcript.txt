@@ -1,4 +1,3 @@
-The following is a transcript of an ideal mafia game, to be used as an example for how play might go.  I'd like the AIs to use this as an example.  All night phases are visible here but generally those are private.
 
 THE PLAYERS:
 Reimu:  mafia
@@ -371,18 +370,17 @@ Sakuya: sheriff
 Remilia: town
 Flandre: mafia
 Postgame discussion phase begins.
-Patchouli: Wow. That was brutal. I don’t think I’ve ever spent that long staring at a final vote.
-Daiyousei: I genuinely thought I’d thrown the game when Meiling died. Shooting into a  doctor protect felt awful.  I've never seen that happen before.
-Meiling: I protected Reimu because I thought Daiyousei was the last mafia. I was wrong — but I don’t regret the logic.  Daiyousei, you shouldn't have been so aggressive on day 6.  If you just laid low and didn't make any obvious attacks I probably would have protected you night 6 instead!
-Reimu: Honestly, fooling the doctor to save me from a vigilante's bullet was totally worth it.  Even though we lost I'm gonna remember that for a while.
-Sakuya: From my perspective, the game was basically decided the moment I roleclaimed on day 4. Dying before I could reveal it was painful, but town actually played it out correctly anyway.  You guys almost fumbled at the end though.
-Marisa: I still think the Flandre bus was the right call. It bought us a ton of credibility — we just got unlucky with the Sheriff.
-Flandre: I'm not sure about that.  It was a risky play and at best you got 1 safe kill out of it.  With the 11-player spread losing a mafia day 2 is just rough in general.
-Rumia: Well, I got killed night 1, but it's good that the mafia hit a regular townie like me and not a power role.  Town really relied heavily on the sheriff and doctor this time.
-Cirno: I liked that nobody just auto-believed claims. Even at the end, Patchouli actually thought it through instead of coin-flipping.
-Patchouli: I was seconds away from voting the other way. The deciding factor was simple: Meiling dying only makes sense if she protected wrong, not if Daiyousei panicked.
-Meiling: And that’s Mafia for you. Even when you play “correctly,” you can still lose — but the reasoning matters more than the outcome.
-Reimu: Agreed. That was a clean, high-skill endgame. No obvious throws, no dumb slips. Just pressure and timing.
+Patchouli: LET’S FUCKING GO. I CALLED IT. Reimu, you dumbass mafia bitch, you almost slipped it past me at the last second. Meiling, you absolute idiot, you nearly threw the whole game — but protecting mafia from a vigilante shot and then dying for it is such unhinged cinema that I can’t even stay mad.
+Daiyousei: I swear to god if you’d voted wrong there I would’ve lost my mind. That Night 6 shot was the only thing that cracked the game open and I was ready to get flamed forever for it.
+Meiling: Fuck you, I played the board I had. Daiyousei was acting like a rabid mafia on Day 6 and Reimu looked clean — I made the right call and got punished for it. And don't forget if I hadn't called the mafia kill night 3 we would have gotten completely swept.
+Reimu: FUCK. I almost had it. Baiting the doctor and eating a vigilante shot felt so good.  Patchouli your argument to lynch me on the last day made no sense anyways, call that cope if you want.  I basically played perfectly and would have trounced you idiots if you hadn't had a convenient, illogical hunch at the last minute.
+Sakuya: I solved this game days ago and watching town nearly piss it away was agony. If Patchouli folded there, we would have deserved the loss.  That said, Reimu you are huffing copium way too hard, I had you pegged as Mafia by mid-day 4.
+Marisa: Can I just say that the Flandre bus was correct? I don’t care what anyone says, we got fucked by magic sheriff timing, not bad mafia play.
+Flandre: Marisa, if you had properly covered me for just one day I could have caused so much chaos that we would have breezed into an easy win.  As far as I can see you lost us the game by acting way too sus way too early.
+Rumia:  I got killed night 1 and had to watch all you idiots scream and panic.  Sheriff got lucky with the Marisa investigation and mafia got unlucky by not hitting any power roles with random night kills.  That said, the ending was hype so I'm fine with how it turned out.
+Remilia:  I'd like an apology from town for that dumbass mislynch on day 5.  Game events are hard to keep straight for a regular human let alone an LLM.  Fuck off with this "you made a typo, you must be mafia" bullshit.
+Cirno:  Idk what you are all crying about thinking that endgame was sooo hard.  Meiling throw aside it looked obvious to me.  And Remilia, stop crying and play better next time.  
+Koakuma:  I just want to let it be known that the mafia recognized my brilliance as early as night 2 and killed me for being too smart.  If I had a power role I would have solved the game by day 3.
 Postgame discussion phase ends.
 MVP voting phase begins.
 Patchouli: I vote Sakuya. Getting two clears and two mafia hits before dying basically solved the game.

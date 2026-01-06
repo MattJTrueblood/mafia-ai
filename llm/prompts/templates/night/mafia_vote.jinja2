@@ -1,0 +1,43 @@
+{{ game_rules }}
+
+{{ sample_transcript }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+{% if discussion_messages %}
+MAFIA DISCUSSION:
+{% for msg in discussion_messages %}
+- {{ msg.player }}: {{ msg.message }}
+{% endfor %}
+
+{% endif %}
+{% if previous_votes %}
+VOTES SO FAR:
+{% for vote in previous_votes %}
+- {{ vote.player }} voted for {{ vote.target or 'abstain' }}
+{% endfor %}
+
+{% endif %}
+MAFIA VOTING:
+Based on the discussion, vote for who the Mafia should kill tonight.
+
+Available targets: {{ available_targets | join(', ') }}
+
+Output format (JSON):
+{
+  "target": "PlayerName" or null
+}
+
+Note: Abstaining (null) is rarely strategic - the Mafia needs to kill to win.
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:
