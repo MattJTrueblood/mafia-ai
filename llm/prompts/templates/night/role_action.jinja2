@@ -1,7 +1,5 @@
 {{ game_rules }}
 
-{{ sample_transcript }}
-
 {{ game_log }}
 
 {{ private_info }}
@@ -18,21 +16,8 @@ YOUR PREVIOUS REASONING:
 
 {% endif %}
 ROLE ACTION:
-Choose {{ action_description }}.
+{{ action_description }}
 
-Available targets: {{ available_targets | join(', ') }}
+Available targets: {{ available_targets | join(', ') }}{% if role_name == "Vigilante" %}, ABSTAIN{% endif %}
 
-You may also choose not to take this action tonight by selecting null.
-
-Output format (JSON):
-{
-  "target": "PlayerName" or null
-}
-
-=== END PHASE INSTRUCTIONS ===
-
-
-
-
-=== START YOUR OUTPUT ===
-YOUR OUTPUT:
+Who will you target tonight?

@@ -449,7 +449,7 @@ function createEventElement(event, playerMap) {
         if (event.player) {
             content += `${turnIcon}<span class="${nameClass}">${escapeHtml(event.player)} (${escapeHtml(roleDisplay)}):</span>`;
         }
-        content += `<span class="event-message">${escapeHtml(event.message)}</span>`;
+        content += `<span class="event-message">${parseMarkdown(event.message)}</span>`;
 
         if (event.visibility !== 'all' && event.visibility !== 'public') {
             content += `<span class="visibility-badge">${getVisibilityLabel(event.visibility)}</span>`;
@@ -578,6 +578,19 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function parseMarkdown(text) {
+    // First escape HTML to prevent XSS
+    let escaped = escapeHtml(text);
+
+    // Parse **bold** (must come before *italic* to avoid conflicts)
+    escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Parse *italic*
+    escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    return escaped;
+}
+
 // Context modal state
 let currentContextData = null;
 
@@ -610,7 +623,7 @@ async function showPlayerContext(playerName) {
         // Set section title and display prompt
         document.getElementById('modal-section-title').textContent = 'Prompt';
         const prompt = data.context.messages?.[0]?.content || 'No prompt available';
-        document.getElementById('modal-content-text').textContent = prompt;
+        document.getElementById('modal-content-text').innerHTML = parseMarkdown(prompt);
 
         // Show modal
         document.getElementById('context-modal').classList.add('active');
@@ -689,7 +702,7 @@ async function showPlayerScratchpad(playerName) {
         };
         document.getElementById('scratchpad-timing').textContent = timingLabels[data.note.timing] || data.note.timing;
         document.getElementById('scratchpad-timestamp').textContent = formatTimestamp(data.note.timestamp);
-        document.getElementById('scratchpad-note').textContent = data.note.note;
+        document.getElementById('scratchpad-note').innerHTML = parseMarkdown(data.note.note);
 
         // Show modal
         document.getElementById('scratchpad-modal').classList.add('active');

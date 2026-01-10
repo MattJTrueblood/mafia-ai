@@ -141,9 +141,31 @@ class OpenRouterClient:
         cancel_event: Optional[Any]
     ) -> Dict[str, Any]:
         """Call Responses API (tool calling endpoint for structured outputs)."""
-        payload = self._build_responses_payload(model, messages, response_format, temperature)
-        response_data = self._execute_responses_request(payload, model, cancel_event)
-        return self._parse_responses_output(response_data, model)
+        max_attempts = 3
+        current_temp = temperature
+
+        for attempt in range(max_attempts):
+            self._check_cancellation(cancel_event, f"before tool call attempt {attempt + 1}")
+
+            payload = self._build_responses_payload(model, messages, response_format, current_temp)
+            response_data = self._execute_responses_request(payload, model, cancel_event)
+            result = self._parse_responses_output(response_data, model)
+
+            # Check if we got a tool call output we can actually parse
+            if "structured_output" in result:
+                if attempt > 0:
+                    logging.info(f"Model {model} succeeded on attempt {attempt + 1}")
+                return result
+
+            # If the model didn't output a useable structured response with the tool call
+            if attempt < max_attempts - 1:
+                current_temp = max(0.0, current_temp - 0.3)
+                logging.warning(f"Model {model} failed to call function on attempt {attempt + 1}, retrying with temp={current_temp}")
+            else:
+                logging.error(f"Model {model} failed to call function after {max_attempts} attempts")
+                raise Exception(f"Model {model} did not call required function after {max_attempts} attempts")
+
+        raise Exception(f"Failed to get structured output from {model}")
 
     def _build_responses_payload(
         self,
@@ -183,7 +205,9 @@ class OpenRouterClient:
             )
 
         response = self._retry_with_cancellation(api_call, cancel_event, "Responses API")
-        return response.json()
+        response_data = response.json()
+        logging.info(f"Responses API raw output for {model}: {response_data}")
+        return response_data
 
     def _parse_responses_output(self, data: Dict[str, Any], model: str) -> Dict[str, Any]:
         """Parse and extract structured output from Responses API."""

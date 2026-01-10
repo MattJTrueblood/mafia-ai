@@ -33,21 +33,31 @@ from llm.prompts import (
 
 
 # Structured output schemas
-ACTION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "target": {"type": ["string", "null"]}
-    },
-    "required": ["target"]
-}
+def build_target_schema(available_targets: List[str], allow_abstain: bool = True) -> dict:
+    """Build a schema with an enum of valid targets.
 
-TARGET_ONLY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "target": {"type": ["string", "null"]}
-    },
-    "required": ["target"]
-}
+    Args:
+        available_targets: List of valid target names
+        allow_abstain: Whether to include ABSTAIN as an option
+
+    Returns:
+        Schema dict with target enum
+    """
+    enum_values = list(available_targets)
+    if allow_abstain:
+        enum_values.append("ABSTAIN")
+
+    return {
+        "type": "object",
+        "properties": {
+            "target": {
+                "type": "string",
+                "enum": enum_values
+            }
+        },
+        "required": ["target"],
+        "additionalProperties": False
+    }
 
 MVP_VOTE_SCHEMA = {
     "type": "object",
@@ -256,9 +266,12 @@ def process_step(
                 "day": game_state.day_number
             }
 
+            # Build schema with actual player names as enum
+            target_schema = build_target_schema(alive_names, allow_abstain=True)
+
             response = call_llm_with_status(
                 mafia, mafia.model, messages,
-                response_format={"type": "json_schema", "json_schema": {"name": "mafia_vote", "schema": TARGET_ONLY_SCHEMA}},
+                response_format={"type": "json_schema", "json_schema": {"name": "mafia_vote", "schema": target_schema}},
                 temperature=0.7,
                 cancel_event=cancel_event
             )
@@ -1805,6 +1818,10 @@ def _parse_action_response(response: Dict) -> str:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logging.error(f"JSON parse failed: {e}")
 
+    # Convert ABSTAIN to None
+    if target == "ABSTAIN":
+        target = None
+
     return target
 
 
@@ -1827,6 +1844,10 @@ def _parse_target_response(response: Dict) -> str:
                 logging.warning(f"No JSON found in response content: {content[:200]}")
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logging.error(f"JSON parse failed: {e}. Content: {response.get('content', '')[:200]}")
+
+    # Convert ABSTAIN to None
+    if target == "ABSTAIN":
+        target = None
 
     return target
 
@@ -2042,9 +2063,13 @@ def _execute_role_action(
             "day": game_state.day_number
         }
 
+        # Build schema with enum - only vigilante can abstain
+        allow_abstain = (role_type == "vigilante")
+        target_schema = build_target_schema(alive_names, allow_abstain=allow_abstain)
+
         response = llm_client.call_model(
             player.model, messages,
-            response_format={"type": "json_schema", "json_schema": {"name": f"{role_type}_action", "schema": TARGET_ONLY_SCHEMA}},
+            response_format={"type": "json_schema", "json_schema": {"name": f"{role_type}_action", "schema": target_schema}},
             temperature=0.7,
             cancel_event=cancel_event
         )

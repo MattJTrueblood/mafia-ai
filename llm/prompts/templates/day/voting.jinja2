@@ -1,7 +1,5 @@
 {{ game_rules }}
 
-{{ sample_transcript }}
-
 {{ game_log }}
 
 {{ private_info }}
@@ -9,23 +7,10 @@
 === START PHASE INSTRUCTIONS ===
 
 DAY VOTING:
-You must vote on who to lynch.
+Who do you vote to lynch?
 
 Available targets: {{ available_targets | join(', ') }} or "abstain"
 
 Your vote explanation will be PUBLIC and visible to all players.
 Reference only information from the game log (public facts).
-
-Output format (JSON):
-{
-  "vote": "PlayerName" or "abstain",
-  "explanation": "Brief public explanation (1-2 sentences)"
-}
-
-=== END PHASE INSTRUCTIONS ===
-
-
-
-
-=== START YOUR OUTPUT ===
-YOUR OUTPUT:
+Explain your vote briefly (1-2 sentences).
