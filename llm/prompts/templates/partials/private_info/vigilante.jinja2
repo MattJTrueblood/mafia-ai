@@ -1,0 +1,12 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, the VIGILANTE (TOWN faction).
+{% if bullet_used %}
+Bullet status: USED (you have no more kills).
+{% else %}
+Bullet status: AVAILABLE (one kill remaining).
+{% endif %}
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

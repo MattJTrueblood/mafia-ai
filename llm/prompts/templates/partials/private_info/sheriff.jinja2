@@ -1,0 +1,15 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, the SHERIFF (TOWN faction).
+You can investigate one player each night to learn their faction.
+
+{% if investigations %}
+Investigation results:
+{% for name, result in investigations %}
+- {{ name }}: {{ result }}
+{% endfor %}
+{% endif %}
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

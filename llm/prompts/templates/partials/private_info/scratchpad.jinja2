@@ -1,0 +1,10 @@
+{% if scratchpad_entries %}
+=== YOUR SCRATCHPAD (Strategic Notes) ===
+{% for entry in scratchpad_entries %}
+
+[Day {{ entry.day }}, {{ entry.timing_label }}{% if loop.first %} - CURRENT{% else %} - outdated{% endif %}]
+{{ entry.note }}
+{% endfor %}
+
+=== END SCRATCHPAD ===
+{% endif %}

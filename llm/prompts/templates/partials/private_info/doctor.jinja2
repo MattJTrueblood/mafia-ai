@@ -1,0 +1,12 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, the DOCTOR (TOWN faction).
+You can protect one player each night from being killed.
+
+{% if last_protected %}
+You cannot protect {{ last_protected }} again (protected last night).
+{% endif %}
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

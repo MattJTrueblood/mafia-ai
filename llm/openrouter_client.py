@@ -129,8 +129,7 @@ class OpenRouterClient:
         if not content:
             logging.warning(f"Empty response from model {model}")
 
-        result = {"content": content}
-        return result
+        return {"content": content}
 
     def _call_responses_api(
         self,
