@@ -171,11 +171,12 @@ def start_game():
     """Initialize a new game with players."""
     data = request.json
     players = data.get("players", [])
-    
+    role_distribution = data.get("role_distribution")
+
     if len(players) < 3:
         return jsonify({"error": "Need at least 3 players"}), 400
 
-    game_state = GameState(players)
+    game_state = GameState(players, role_distribution=role_distribution)
     games[game_state.game_id] = game_state
     
     return jsonify({"game_id": game_state.game_id, "redirect": url_for("game_view", game_id=game_state.game_id)})

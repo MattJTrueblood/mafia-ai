@@ -5,118 +5,310 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mafia AI - Setup</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .preset-buttons button {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .preset-buttons button.active {
+            background-color: #4a9eff;
+            border-color: #4a9eff;
+        }
+        .role-config {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        .role-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .role-input label {
+            min-width: 70px;
+        }
+        .role-input input[type="number"] {
+            width: 60px;
+            padding: 6px;
+            text-align: center;
+        }
+        .model-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .model-actions select {
+            flex: 1;
+            max-width: 400px;
+        }
+        .player-count-display {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #888;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Mafia AI Game Setup</h1>
-        <p>Configure your AI players and start the game.</p>
-        
+
+        <h3>Presets</h3>
+        <div class="preset-buttons">
+            <button type="button" data-preset="micro">Micro (5)</button>
+            <button type="button" data-preset="classic">Classic (7)</button>
+            <button type="button" data-preset="standard" class="active">Standard (9)</button>
+            <button type="button" data-preset="competitive">Competitive (10)</button>
+            <button type="button" data-preset="large">Large (12)</button>
+            <button type="button" data-preset="violent">Violent (9)</button>
+            <button type="button" data-preset="mountainous">Mountainous (11)</button>
+        </div>
+
+        <h3>Role Configuration</h3>
+        <div class="role-config">
+            <div class="role-input">
+                <label>Mafia:</label>
+                <input type="number" id="role-mafia" min="1" max="10" value="2">
+            </div>
+            <div class="role-input">
+                <label>Town:</label>
+                <input type="number" id="role-town" min="0" max="20" value="4">
+            </div>
+            <div class="role-input">
+                <label>Sheriff:</label>
+                <input type="number" id="role-sheriff" min="0" max="3" value="1">
+            </div>
+            <div class="role-input">
+                <label>Doctor:</label>
+                <input type="number" id="role-doctor" min="0" max="3" value="1">
+            </div>
+            <div class="role-input">
+                <label>Vigilante:</label>
+                <input type="number" id="role-vigilante" min="0" max="3" value="1">
+            </div>
+        </div>
+
+        <h3>Model Assignment</h3>
+        <div class="model-actions">
+            <select id="bulk-model-select">
+                <!-- Populated by JS -->
+            </select>
+            <button type="button" id="set-all-models-btn">Set All</button>
+            <button type="button" id="random-models-btn">Randomize</button>
+        </div>
+
         <form id="setup-form">
+            <div class="player-count-display">
+                <span id="player-count-text">9 players</span>
+            </div>
             <div id="players-container">
                 <!-- Players will be added here -->
             </div>
-            
-            <button type="button" id="add-player-btn">Add Player</button>
-            <button type="button" id="remove-player-btn">Remove Player</button>
-            <button type="submit" id="start-game-btn">Start Game</button>
+
+            <div style="margin-top: 20px;">
+                <button type="submit" id="start-game-btn">Start Game</button>
+            </div>
         </form>
-        
+
         <div id="error-message" class="error" style="display: none;"></div>
     </div>
-    
+
     <script>
         const defaultModels = {{ default_models | tojson }};
         const modelPricing = {{ model_pricing | tojson }};
-        // Friendly default names to use instead of "Player 1", "Player 2", ...
-        const defaultNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy'];
-        let playerCount = 7; // Default
-        
-        // Initialize with default players
-        function initializePlayers() {
-            const container = document.getElementById('players-container');
-            container.innerHTML = '';
-            
-            for (let i = 0; i < playerCount; i++) {
-                addPlayerRow(i + 1);
-            }
-        }
-        
+        const defaultNames = [
+            'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi',
+            'Ivan', 'Judy', 'Kevin', 'Luna', 'Mike', 'Nina', 'Oscar', 'Pam'
+        ];
+
+        const PRESETS = {
+            micro:       { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Town: 3 },
+            classic:     { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 0, Town: 3 },
+            standard:    { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 4 },
+            competitive: { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 4 },
+            large:       { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 6 },
+            violent:     { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Town: 4 },
+            mountainous: { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Town: 9 }
+        };
+
         function formatPricing(modelId) {
             if (modelPricing[modelId]) {
                 const p = modelPricing[modelId];
-                return ` ($${p.input.toFixed(2)}/$1M in, $${p.output.toFixed(2)}/$1M out)`;
+                return ` ($${p.input.toFixed(2)}/$${p.output.toFixed(2)})`;
             }
             return '';
         }
-        
-        function addPlayerRow(num) {
+
+        function getTotalPlayers() {
+            return parseInt(document.getElementById('role-mafia').value || 0)
+                 + parseInt(document.getElementById('role-town').value || 0)
+                 + parseInt(document.getElementById('role-sheriff').value || 0)
+                 + parseInt(document.getElementById('role-doctor').value || 0)
+                 + parseInt(document.getElementById('role-vigilante').value || 0);
+        }
+
+        function getRoleDistribution() {
+            return {
+                Mafia: parseInt(document.getElementById('role-mafia').value || 0),
+                Town: parseInt(document.getElementById('role-town').value || 0),
+                Sheriff: parseInt(document.getElementById('role-sheriff').value || 0),
+                Doctor: parseInt(document.getElementById('role-doctor').value || 0),
+                Vigilante: parseInt(document.getElementById('role-vigilante').value || 0)
+            };
+        }
+
+        function applyPreset(presetName) {
+            const preset = PRESETS[presetName];
+            if (!preset) return;
+
+            document.getElementById('role-mafia').value = preset.Mafia;
+            document.getElementById('role-town').value = preset.Town;
+            document.getElementById('role-sheriff').value = preset.Sheriff;
+            document.getElementById('role-doctor').value = preset.Doctor;
+            document.getElementById('role-vigilante').value = preset.Vigilante;
+
+            // Update active button
+            document.querySelectorAll('.preset-buttons button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.preset === presetName);
+            });
+
+            rebuildPlayers();
+        }
+
+        function rebuildPlayers() {
+            const container = document.getElementById('players-container');
+            const total = getTotalPlayers();
+
+            // Preserve existing names and models where possible
+            const existingData = [];
+            container.querySelectorAll('.player-row').forEach((row, i) => {
+                const nameInput = row.querySelector('input[type="text"]');
+                const modelSelect = row.querySelector('select');
+                existingData.push({
+                    name: nameInput?.value || '',
+                    model: modelSelect?.value || ''
+                });
+            });
+
+            container.innerHTML = '';
+
+            for (let i = 0; i < total; i++) {
+                const existing = existingData[i];
+                const defaultName = existing?.name || defaultNames[i] || `Player ${i + 1}`;
+                const defaultModel = existing?.model || defaultModels[Math.floor(Math.random() * defaultModels.length)];
+                addPlayerRow(i + 1, defaultName, defaultModel);
+            }
+
+            document.getElementById('player-count-text').textContent = `${total} players`;
+        }
+
+        function addPlayerRow(num, name, selectedModel) {
             const container = document.getElementById('players-container');
             const div = document.createElement('div');
             div.className = 'player-row';
 
-            // Pick a friendly default name when available
-            const defaultName = defaultNames[num - 1] || `Player ${num}`;
-
-            // Randomly select a default model
-            const randomModel = defaultModels[Math.floor(Math.random() * defaultModels.length)];
-
             div.innerHTML = `
                 <label>Player ${num}:</label>
-                <input type="text" name="player${num}_name" placeholder="${defaultName}" value="${defaultName}" required>
+                <input type="text" name="player${num}_name" value="${name}" required>
                 <select name="player${num}_model" required>
                     ${defaultModels.map(model => {
                         const pricing = formatPricing(model);
-                        const selected = model === randomModel ? ' selected' : '';
+                        const selected = model === selectedModel ? ' selected' : '';
                         return `<option value="${model}"${selected}>${model}${pricing}</option>`;
                     }).join('')}
                 </select>
             `;
             container.appendChild(div);
         }
-        
-        document.getElementById('add-player-btn').addEventListener('click', () => {
-            playerCount++;
-            addPlayerRow(playerCount);
+
+        function setAllModels(model) {
+            document.querySelectorAll('#players-container select').forEach(select => {
+                select.value = model;
+            });
+        }
+
+        function randomizeModels() {
+            document.querySelectorAll('#players-container select').forEach(select => {
+                const randomModel = defaultModels[Math.floor(Math.random() * defaultModels.length)];
+                select.value = randomModel;
+            });
+        }
+
+        function initializeBulkModelSelect() {
+            const select = document.getElementById('bulk-model-select');
+            select.innerHTML = defaultModels.map(model => {
+                const pricing = formatPricing(model);
+                return `<option value="${model}">${model}${pricing}</option>`;
+            }).join('');
+        }
+
+        // Preset button handlers
+        document.querySelectorAll('.preset-buttons button').forEach(btn => {
+            btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
         });
-        
-        document.getElementById('remove-player-btn').addEventListener('click', () => {
-            if (playerCount > 3) {
-                const container = document.getElementById('players-container');
-                container.removeChild(container.lastChild);
-                playerCount--;
-            } else {
-                alert('Need at least 3 players');
-            }
+
+        // Role input change handlers
+        document.querySelectorAll('.role-config input').forEach(input => {
+            input.addEventListener('change', () => {
+                // Clear active preset when manually editing
+                document.querySelectorAll('.preset-buttons button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                rebuildPlayers();
+            });
         });
-        
+
+        // Set all models button
+        document.getElementById('set-all-models-btn').addEventListener('click', () => {
+            const model = document.getElementById('bulk-model-select').value;
+            setAllModels(model);
+        });
+
+        // Random models button
+        document.getElementById('random-models-btn').addEventListener('click', randomizeModels);
+
+        // Form submission
         document.getElementById('setup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const formData = new FormData(e.target);
             const players = [];
-            
-            for (let i = 1; i <= playerCount; i++) {
+            const total = getTotalPlayers();
+
+            for (let i = 1; i <= total; i++) {
                 const name = formData.get(`player${i}_name`);
                 const model = formData.get(`player${i}_model`);
                 if (name && model) {
                     players.push({ name, model });
                 }
             }
-            
+
             if (players.length < 3) {
                 showError('Need at least 3 players');
                 return;
             }
-            
+
+            const roleDistribution = getRoleDistribution();
+
             try {
                 const response = await fetch('/start_game', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ players })
+                    body: JSON.stringify({ players, role_distribution: roleDistribution })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (response.ok) {
                     window.location.href = data.redirect;
                 } else {
@@ -126,16 +318,16 @@
                 showError('Error starting game: ' + error.message);
             }
         });
-        
+
         function showError(message) {
             const errorDiv = document.getElementById('error-message');
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
         }
-        
-        // Initialize on load
-        initializePlayers();
+
+        // Initialize
+        initializeBulkModelSelect();
+        applyPreset('standard');
     </script>
 </body>
 </html>
-

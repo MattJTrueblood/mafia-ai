@@ -2,7 +2,7 @@
 
 import random
 import uuid
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from .roles import Role, ROLE_CLASSES
 
 
@@ -203,9 +203,13 @@ class GameState:
                 return player
         return None
 
-    def add_event(self, event_type: str, message: str, visibility: str = "all",
+    def add_event(self, event_type: str, message: str, visibility: Union[str, List[str]] = "all",
                   player: str = None, priority: int = None, metadata: dict = None) -> dict:
-        """Add an event to the unified event log."""
+        """Add an event to the unified event log.
+
+        Args:
+            visibility: "all", "public", or a list of player names who can see this event
+        """
         self._event_counter += 1
         event = {
             "id": self._event_counter,
@@ -240,13 +244,8 @@ class GameState:
         self.phase_data = {
             "mafia_discussion_messages": [],
             "mafia_votes": [],
-            "doctor_discussion": None,
-            "doctor_protection": None,
-            "sheriff_discussion": None,
-            "sheriff_investigation": None,
-            "vigilante_discussion": None,
-            "vigilante_kill": None,
-            "protected_player": None,
+            "protected_players": [],      # List of players protected by doctors
+            "vigilante_kills": [],        # List of vigilante kill targets
         }
 
     def start_day_phase(self):

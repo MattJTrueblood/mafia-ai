@@ -88,6 +88,11 @@ TURN_POLL_SCHEMA = {
 }
 
 
+def get_mafia_visibility(game_state: GameState) -> List[str]:
+    """Get list of mafia player names for event visibility."""
+    return [p.name for p in game_state.get_players_by_role("Mafia")]
+
+
 class StepResult:
     """Result of executing a single step."""
 
@@ -166,19 +171,15 @@ def process_step(
 
     if step == GameState.STEP_NIGHT_START:
         # Initialize night phase
+        mafia_visibility = get_mafia_visibility(game_state)
         game_state.phase_data = {
             "mafia_discussion_messages": [],
             "mafia_votes": [],
-            "doctor_discussion": None,
-            "doctor_protection": None,
-            "sheriff_discussion": None,
-            "sheriff_investigation": None,
-            "vigilante_discussion": None,
-            "vigilante_kill": None,
-            "protected_player": None,
+            "protected_players": [],      # List of players protected by doctors
+            "vigilante_kills": [],        # List of vigilante kill targets
         }
         game_state.add_event("phase_change", f"Night {game_state.day_number} begins.", "all")
-        game_state.add_event("system", "Mafia night actions begin.", "mafia")
+        game_state.add_event("system", "Mafia night actions begin.", mafia_visibility)
         emit_update()
 
         # Advance to night scratchpad (special roles only)
@@ -214,16 +215,17 @@ def process_step(
 
     elif step == GameState.STEP_MAFIA_DISCUSSION:
         mafia_players = game_state.get_players_by_role("Mafia")
+        mafia_visibility = get_mafia_visibility(game_state)
 
         if index == 0:
             # First mafia member - add phase marker
-            game_state.add_event("system", "Mafia Discussion phase begins.", "mafia")
+            game_state.add_event("system", "Mafia Discussion phase begins.", mafia_visibility)
             emit_update()
 
         if index >= len(mafia_players):
             # All mafia have discussed, move to voting
-            game_state.add_event("system", "Mafia Discussion phase ends.", "mafia")
-            game_state.add_event("system", "Mafia vote phase begins.", "mafia")
+            game_state.add_event("system", "Mafia Discussion phase ends.", mafia_visibility)
+            game_state.add_event("system", "Mafia vote phase begins.", mafia_visibility)
             game_state.current_step = GameState.STEP_MAFIA_VOTE
             game_state.step_index = 0
             emit_update()
@@ -240,7 +242,7 @@ def process_step(
         })
 
         # Log the discussion message
-        game_state.add_event("mafia_chat", f"[Mafia Discussion] {mafia.name}: {message}", "mafia",
+        game_state.add_event("mafia_chat", f"[Mafia Discussion] {mafia.name}: {message}", mafia_visibility,
                             player=mafia.name, priority=7)
         emit_update()
 
@@ -250,6 +252,7 @@ def process_step(
 
     elif step == GameState.STEP_MAFIA_VOTE:
         mafia_players = game_state.get_players_by_role("Mafia")
+        mafia_visibility = get_mafia_visibility(game_state)
         discussion_messages = game_state.phase_data.get("mafia_discussion_messages", [])
         alive_names = [p.name for p in game_state.get_alive_players()]
 
@@ -283,7 +286,7 @@ def process_step(
 
             # Log the vote immediately when this player completes
             vote_msg = f"[Mafia Vote] {mafia.name} votes to kill {target}" if target else f"[Mafia Vote] {mafia.name} abstains"
-            game_state.add_event("mafia_chat", vote_msg, "mafia", player=mafia.name, priority=7)
+            game_state.add_event("mafia_chat", vote_msg, mafia_visibility, player=mafia.name, priority=7)
 
             return {"player": mafia.name, "target": target}
 
@@ -303,15 +306,15 @@ def process_step(
         _tally_mafia_votes(game_state)
         target = game_state.phase_data.get("mafia_kill_target")
         if target:
-            game_state.add_event("system", f"Mafia has chosen to kill {target}.", "mafia")
-        game_state.add_event("system", "Mafia night actions end.", "mafia")
+            game_state.add_event("system", f"Mafia has chosen to kill {target}.", mafia_visibility)
+        game_state.add_event("system", "Mafia night actions end.", mafia_visibility)
         game_state.current_step = GameState.STEP_DOCTOR_DISCUSS
         game_state.step_index = 0
         emit_update()
         return StepResult()
 
     elif step == GameState.STEP_DOCTOR_DISCUSS:
-        doctor_players = game_state.get_players_by_role("Doctor")
+        doctor_players = [p for p in game_state.get_players_by_role("Doctor") if p.alive]
 
         if not doctor_players:
             # No doctor, skip to sheriff
@@ -319,24 +322,44 @@ def process_step(
             game_state.step_index = 0
             return StepResult()
 
-        doctor = doctor_players[0]
-        game_state.add_event("system", "Doctor night phase begins.", "doctor")
+        if index >= len(doctor_players):
+            # All doctors have discussed, move to action phase
+            game_state.current_step = GameState.STEP_DOCTOR_ACT
+            game_state.step_index = 0
+            return StepResult()
+
+        doctor = doctor_players[index]
+        doctor_visibility = [doctor.name]
+
+        if index == 0:
+            all_doctor_names = [p.name for p in doctor_players]
+            game_state.add_event("system", "Doctor night phase begins.", all_doctor_names)
 
         # Get doctor's discussion/thinking
         discussion = _execute_role_discussion(game_state, doctor, "doctor", llm_client, cancel_event, emit_player_status)
-        game_state.phase_data["doctor_discussion"] = discussion
 
         game_state.add_event("role_action", f"[Doctor Discussion] {doctor.name}: {discussion}",
-                            "doctor", player=doctor.name, priority=6)
+                            doctor_visibility, player=doctor.name, priority=6)
         emit_update()
 
-        game_state.current_step = GameState.STEP_DOCTOR_ACT
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_DOCTOR_ACT:
-        doctor_players = game_state.get_players_by_role("Doctor")
-        doctor = doctor_players[0]
+        doctor_players = [p for p in game_state.get_players_by_role("Doctor") if p.alive]
+
+        if index >= len(doctor_players):
+            # All doctors have acted, move to sheriff
+            if doctor_players:
+                all_doctor_names = [p.name for p in doctor_players]
+                game_state.add_event("system", "Doctor night phase ends.", all_doctor_names)
+                emit_update()
+            game_state.current_step = GameState.STEP_SHERIFF_DISCUSS
+            game_state.step_index = 0
+            return StepResult()
+
+        doctor = doctor_players[index]
+        doctor_visibility = [doctor.name]
 
         # Get actual target
         target = _execute_role_action(game_state, doctor, "doctor", llm_client, cancel_event, emit_player_status)
@@ -345,25 +368,25 @@ def process_step(
         if target and doctor.role.last_protected == target:
             game_state.add_event("role_action",
                 f"Doctor {doctor.name} cannot protect {target} again (protected last night).",
-                "doctor", player=doctor.name, priority=7)
+                doctor_visibility, player=doctor.name, priority=7)
             target = None
         elif target:
             doctor.role.last_protected = target
-            game_state.phase_data["protected_player"] = target
+            # Add to list of protected players
+            if "protected_players" not in game_state.phase_data:
+                game_state.phase_data["protected_players"] = []
+            game_state.phase_data["protected_players"].append(target)
 
             game_state.add_event("role_action", f"Doctor {doctor.name} protects {target}.",
-                                "doctor", player=doctor.name, priority=7)
+                                doctor_visibility, player=doctor.name, priority=7)
 
-        game_state.phase_data["doctor_protection"] = {"target": target}
-        game_state.add_event("system", "Doctor night phase ends.", "doctor")
         emit_update()
 
-        game_state.current_step = GameState.STEP_SHERIFF_DISCUSS
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_SHERIFF_DISCUSS:
-        sheriff_players = game_state.get_players_by_role("Sheriff")
+        sheriff_players = [p for p in game_state.get_players_by_role("Sheriff") if p.alive]
 
         if not sheriff_players:
             # No sheriff, skip to vigilante
@@ -371,24 +394,44 @@ def process_step(
             game_state.step_index = 0
             return StepResult()
 
-        sheriff = sheriff_players[0]
-        game_state.add_event("system", "Sheriff night phase begins.", "sheriff")
+        if index >= len(sheriff_players):
+            # All sheriffs have discussed, move to action phase
+            game_state.current_step = GameState.STEP_SHERIFF_ACT
+            game_state.step_index = 0
+            return StepResult()
+
+        sheriff = sheriff_players[index]
+        sheriff_visibility = [sheriff.name]
+
+        if index == 0:
+            all_sheriff_names = [p.name for p in sheriff_players]
+            game_state.add_event("system", "Sheriff night phase begins.", all_sheriff_names)
 
         # Get sheriff's discussion/thinking
         discussion = _execute_role_discussion(game_state, sheriff, "sheriff", llm_client, cancel_event, emit_player_status)
-        game_state.phase_data["sheriff_discussion"] = discussion
 
         game_state.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {discussion}",
-                            "sheriff", player=sheriff.name, priority=6)
+                            sheriff_visibility, player=sheriff.name, priority=6)
         emit_update()
 
-        game_state.current_step = GameState.STEP_SHERIFF_ACT
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_SHERIFF_ACT:
-        sheriff_players = game_state.get_players_by_role("Sheriff")
-        sheriff = sheriff_players[0]
+        sheriff_players = [p for p in game_state.get_players_by_role("Sheriff") if p.alive]
+
+        if index >= len(sheriff_players):
+            # All sheriffs have acted, move to vigilante
+            if sheriff_players:
+                all_sheriff_names = [p.name for p in sheriff_players]
+                game_state.add_event("system", "Sheriff night phase ends.", all_sheriff_names)
+                emit_update()
+            game_state.current_step = GameState.STEP_VIGILANTE_DISCUSS
+            game_state.step_index = 0
+            return StepResult()
+
+        sheriff = sheriff_players[index]
+        sheriff_visibility = [sheriff.name]
 
         # Get actual target
         target = _execute_role_action(game_state, sheriff, "sheriff", llm_client, cancel_event, emit_player_status)
@@ -401,9 +444,9 @@ def process_step(
                 sheriff.role.investigations.append((target, result))
 
                 game_state.add_event("role_action", f"Sheriff {sheriff.name} investigates {target}.",
-                                    "sheriff", player=sheriff.name, priority=7)
+                                    sheriff_visibility, player=sheriff.name, priority=7)
                 game_state.add_event("role_action", f"{target} is {result.upper()}!",
-                                    "sheriff", player=sheriff.name, priority=8,
+                                    sheriff_visibility, player=sheriff.name, priority=8,
                                     metadata={"target": target, "result": result})
 
                 # Get sheriff's reaction to the result
@@ -412,68 +455,96 @@ def process_step(
                 )
                 if reaction:
                     game_state.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {reaction}",
-                                        "sheriff", player=sheriff.name, priority=9)
+                                        sheriff_visibility, player=sheriff.name, priority=9)
 
-        game_state.phase_data["sheriff_investigation"] = {"target": target, "result": result}
-        game_state.add_event("system", "Sheriff night phase ends.", "sheriff")
         emit_update()
 
-        game_state.current_step = GameState.STEP_VIGILANTE_DISCUSS
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_VIGILANTE_DISCUSS:
-        vigilante_players = game_state.get_players_by_role("Vigilante")
+        # Cache eligible vigilantes at start of phase to ensure consistent iteration
+        if "vigilante_eligible" not in game_state.phase_data:
+            game_state.phase_data["vigilante_eligible"] = [
+                p.name for p in game_state.get_players_by_role("Vigilante")
+                if p.alive and not p.role.bullet_used
+            ]
+
+        eligible_names = game_state.phase_data["vigilante_eligible"]
+        vigilante_players = [game_state.get_player_by_name(n) for n in eligible_names]
 
         if not vigilante_players:
-            # No vigilante, skip to night resolve
+            # No vigilante with bullet, skip to night resolve
             game_state.current_step = GameState.STEP_NIGHT_RESOLVE
             game_state.step_index = 0
             return StepResult()
 
-        vigilante = vigilante_players[0]
-
-        if vigilante.role.bullet_used:
-            # Bullet already used, skip
-            game_state.current_step = GameState.STEP_NIGHT_RESOLVE
+        if index >= len(vigilante_players):
+            # All vigilantes have discussed, move to action phase
+            game_state.current_step = GameState.STEP_VIGILANTE_ACT
             game_state.step_index = 0
             return StepResult()
 
-        game_state.add_event("system", "Vigilante night phase begins.", "vigilante")
+        vigilante = vigilante_players[index]
+        vigilante_visibility = [vigilante.name]
+
+        if index == 0:
+            all_vig_names = [p.name for p in vigilante_players]
+            game_state.add_event("system", "Vigilante night phase begins.", all_vig_names)
 
         # Get vigilante's discussion/thinking
         discussion = _execute_role_discussion(game_state, vigilante, "vigilante", llm_client, cancel_event, emit_player_status)
-        game_state.phase_data["vigilante_discussion"] = discussion
 
         game_state.add_event("role_action", f"[Vigilante Discussion] {vigilante.name}: {discussion}",
-                            "vigilante", player=vigilante.name, priority=6)
+                            vigilante_visibility, player=vigilante.name, priority=6)
         emit_update()
 
-        game_state.current_step = GameState.STEP_VIGILANTE_ACT
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_VIGILANTE_ACT:
-        vigilante_players = game_state.get_players_by_role("Vigilante")
-        vigilante = vigilante_players[0]
+        # Get alive vigilantes - don't re-filter by bullet_used since bullets are consumed during iteration
+        # Use the cached list from discuss phase if available
+        if "vigilante_eligible" not in game_state.phase_data:
+            game_state.phase_data["vigilante_eligible"] = [
+                p.name for p in game_state.get_players_by_role("Vigilante")
+                if p.alive and not p.role.bullet_used
+            ]
+        eligible_names = game_state.phase_data["vigilante_eligible"]
+        vigilante_players = [game_state.get_player_by_name(n) for n in eligible_names]
+
+        if index >= len(vigilante_players):
+            # All vigilantes have acted, move to night resolve
+            if vigilante_players:
+                all_vig_names = [p.name for p in vigilante_players]
+                game_state.add_event("system", "Vigilante night phase ends.", all_vig_names)
+                emit_update()
+            game_state.current_step = GameState.STEP_NIGHT_RESOLVE
+            game_state.step_index = 0
+            return StepResult()
+
+        vigilante = vigilante_players[index]
+        vigilante_visibility = [vigilante.name]
 
         # Get actual target
         target = _execute_role_action(game_state, vigilante, "vigilante", llm_client, cancel_event, emit_player_status)
 
         if target:
             vigilante.role.bullet_used = True
-            game_state.add_event("role_action", f"Vigilante shoots {target} tonight.",
-                                "vigilante", player=vigilante.name, priority=7)
-        else:
-            game_state.add_event("role_action", "Vigilante shoots nobody tonight.",
-                                "vigilante", player=vigilante.name, priority=7)
+            # Add to list of vigilante kills
+            if "vigilante_kills" not in game_state.phase_data:
+                game_state.phase_data["vigilante_kills"] = []
+            game_state.phase_data["vigilante_kills"].append({"vigilante": vigilante.name, "target": target})
 
-        game_state.phase_data["vigilante_kill"] = {"target": target}
-        game_state.add_event("system", "Vigilante night phase ends.", "vigilante")
+            game_state.add_event("role_action", f"Vigilante shoots {target} tonight.",
+                                vigilante_visibility, player=vigilante.name, priority=7)
+        else:
+            game_state.add_event("role_action", f"{vigilante.name} chooses not to shoot tonight.",
+                                vigilante_visibility, player=vigilante.name, priority=7)
+
         emit_update()
 
-        game_state.current_step = GameState.STEP_NIGHT_RESOLVE
-        game_state.step_index = 0
+        game_state.step_index = index + 1
         return StepResult()
 
     elif step == GameState.STEP_NIGHT_RESOLVE:
@@ -1295,12 +1366,13 @@ def _execute_vigilante_kill(
 
 def _resolve_night_actions(game_state: GameState):
     """Resolve night actions and apply kills."""
-    protected = game_state.phase_data.get("protected_player")
+    # Get all protected players (supports multiple doctors)
+    protected_players = game_state.phase_data.get("protected_players", [])
     kills = []
 
     # Mafia kill
     mafia_target = game_state.phase_data.get("mafia_kill_target")
-    if mafia_target and mafia_target != protected:
+    if mafia_target and mafia_target not in protected_players:
         target_player = game_state.get_player_by_name(mafia_target)
         if target_player and target_player.alive:
             target_player.alive = False
@@ -1308,11 +1380,11 @@ def _resolve_night_actions(game_state: GameState):
                                 "all", metadata={"player": mafia_target, "reason": "mafia_kill"})
             kills.append(mafia_target)
 
-    # Vigilante kill
-    vig_data = game_state.phase_data.get("vigilante_kill")
-    if vig_data and vig_data.get("target"):
-        vig_target = vig_data["target"]
-        if vig_target != protected and vig_target not in kills:
+    # Vigilante kills (supports multiple vigilantes)
+    vigilante_kills = game_state.phase_data.get("vigilante_kills", [])
+    for vig_data in vigilante_kills:
+        vig_target = vig_data.get("target")
+        if vig_target and vig_target not in protected_players and vig_target not in kills:
             target_player = game_state.get_player_by_name(vig_target)
             if target_player and target_player.alive:
                 target_player.alive = False

@@ -8,11 +8,16 @@ from .template_manager import get_template_manager
 # Helper functions (preserved from original prompts.py)
 
 def get_visible_events(game_state, viewing_player=None) -> list:
-    """Get all events visible to a specific player, in chronological order."""
+    """Get all events visible to a specific player, in chronological order.
+
+    Visibility can be:
+    - "all" or "public": visible to everyone
+    - A list of player names: visible only to those players
+    """
     if viewing_player is None:
         return [e for e in game_state.events if e.get("visibility") in ("all", "public")]
 
-    role_name = viewing_player.role.name if viewing_player.role else None
+    player_name = viewing_player.name
     visible = []
 
     for event in game_state.events:
@@ -20,13 +25,7 @@ def get_visible_events(game_state, viewing_player=None) -> list:
 
         if visibility in ("all", "public"):
             visible.append(event)
-        elif visibility == "mafia" and role_name == "Mafia":
-            visible.append(event)
-        elif visibility == "sheriff" and role_name == "Sheriff":
-            visible.append(event)
-        elif visibility == "doctor" and role_name == "Doctor":
-            visible.append(event)
-        elif visibility == "vigilante" and role_name == "Vigilante":
+        elif isinstance(visibility, list) and player_name in visibility:
             visible.append(event)
 
     return visible
