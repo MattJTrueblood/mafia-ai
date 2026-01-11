@@ -37,7 +37,10 @@ class Town(Role):
 
 class Sheriff(Role):
     """Sheriff role - can investigate players at night."""
-    
+
+    # Night action steps - used by phases.py for automatic step sequencing
+    night_steps = ["sheriff_discuss", "sheriff_act"]
+
     def __init__(self):
         super().__init__("Sheriff")
         self.team = "town"
@@ -46,7 +49,10 @@ class Sheriff(Role):
 
 class Doctor(Role):
     """Doctor role - can protect players at night."""
-    
+
+    # Night action steps - used by phases.py for automatic step sequencing
+    night_steps = ["doctor_discuss", "doctor_act"]
+
     def __init__(self):
         super().__init__("Doctor")
         self.team = "town"
@@ -55,7 +61,10 @@ class Doctor(Role):
 
 class Vigilante(Role):
     """Vigilante role - can kill one player during the game."""
-    
+
+    # Night action steps - used by phases.py for automatic step sequencing
+    night_steps = ["vigilante_discuss", "vigilante_act"]
+
     def __init__(self):
         super().__init__("Vigilante")
         self.team = "town"

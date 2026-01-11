@@ -10,7 +10,8 @@ from gevent.event import Event
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from game.game_state import GameState
-from game.step_processor import process_step
+from game.runner import run_step
+from game.rules import DEFAULT_RULES
 from llm.openrouter_client import OpenRouterClient, LLMCancelledException
 from game.error_logger import initialize_logging
 import config
@@ -127,15 +128,24 @@ def game_loop(game_id: str):
             control.cancel_event.clear()
 
             try:
-                process_step(
+                # Create callback wrappers that capture game_id
+                def status_callback(action, **kwargs):
+                    emit_discussion_status(game_id, {"action": action, **kwargs})
+
+                def player_status_callback(player_name, status):
+                    emit_player_status(game_id, player_name, status)
+
+                run_step(
                     game_state=game_state,
                     llm_client=llm_client,
+                    rules=DEFAULT_RULES,
+                    emit_status=status_callback,
+                    emit_player_status=player_status_callback,
                     cancel_event=control.cancel_event,
-                    emit_callback=emit_game_state_update,
-                    emit_status_callback=emit_discussion_status,
-                    emit_player_status_callback=emit_player_status,
-                    game_id=game_id,
                 )
+
+                # Emit full state update after each step
+                emit_game_state_update(game_id, game_state)
 
                 # Small yield to allow other greenlets to run
                 gevent.sleep(0)
