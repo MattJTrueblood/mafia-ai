@@ -71,6 +71,14 @@ class Vigilante(Role):
         self.bullet_used = False  # One bullet for entire game
 
 
+class Jester(Role):
+    """Jester role - third party that wins by being lynched."""
+
+    def __init__(self):
+        super().__init__("Jester")
+        self.team = "third_party"
+
+
 # Role registry
 ROLE_CLASSES = {
     "Mafia": Mafia,
@@ -78,5 +86,6 @@ ROLE_CLASSES = {
     "Sheriff": Sheriff,
     "Doctor": Doctor,
     "Vigilante": Vigilante,
+    "Jester": Jester,
 }
 

@@ -228,8 +228,14 @@ def resolve_voting(game_state: GameState):
         target_player = game_state.get_player_by_name(lynch_target)
         game_state.kill_player(lynch_target, f"Lynched by vote ({lynch_votes} votes).")
         if target_player:
-            role_flip = "MAFIA" if target_player.team == "mafia" else "TOWN"
-            game_state.add_event("system", f"{lynch_target} was {role_flip}.", "all")
+            # Check for Jester win - sets winner, postgame handles the rest
+            if (target_player.role.name == "Jester"):
+                game_state.winner = "jester"
+                game_state.winning_jester = lynch_target  # Track which Jester won
+                game_state.add_event("system", f"{lynch_target} was the JESTER! {lynch_target} wins!", "all")
+            else:
+                role_flip = "MAFIA" if target_player.team == "mafia" else "TOWN"
+                game_state.add_event("system", f"{lynch_target} was {role_flip}.", "all")
     else:
         game_state.add_event("vote_result",
             "Nobody died, as no player received a majority of votes.", "all")
@@ -588,6 +594,10 @@ def handle_voting_resolve(ctx: StepContext) -> StepResult:
     resolve_voting(ctx.game_state)
     ctx.add_event("system", f"Day {ctx.day_number} voting phase ends.")
     ctx.add_event("system", f"Day {ctx.day_number} ends.")
+
+    # Check for Jester win (set during resolve_voting) or normal win
+    if ctx.game_state.winner:
+        return StepResult(next_step="postgame_reveal", next_index=0)
 
     winner = check_win_conditions(ctx.game_state)
     if winner:

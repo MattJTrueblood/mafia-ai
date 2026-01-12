@@ -121,6 +121,8 @@ function updatePlayers(players) {
             className += ' mafia';
         } else if (player.team === 'town') {
             className += ' town';
+        } else if (player.team === 'third_party') {
+            className += ' third_party';
         }
 
         // Add waiting class if this player has a pending API call
@@ -314,6 +316,8 @@ function getPlayerNameClass(playerInfo) {
         className += ' mafia';
     } else if (playerInfo.team === 'town') {
         className += ' town';
+    } else if (playerInfo.team === 'third_party') {
+        className += ' third_party';
     }
     return className;
 }

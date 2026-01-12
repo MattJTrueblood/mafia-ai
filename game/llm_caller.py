@@ -172,7 +172,7 @@ def parse_turn_poll(response: Dict) -> tuple[bool, bool, bool]:
     return wants_interrupt, wants_respond, wants_pass
 
 
-def parse_text(response: Dict, player_name: str = None, max_length: int = 1000) -> str:
+def parse_text(response: Dict, player_name: str = None, max_length: int = 2000) -> str:
     """
     Parse a text response (discussion, scratchpad, etc.).
 

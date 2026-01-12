@@ -93,8 +93,17 @@ def execute_parallel(players, func, ctx: StepContext):
 @register_handler("postgame_reveal")
 def handle_postgame_reveal(ctx: StepContext) -> StepResult:
     """Reveal all player roles."""
-    winner_text = "TOWN" if ctx.game_state.winner == "town" else "MAFIA"
-    ctx.add_event("system", f"{winner_text} WINS!")
+    winner = ctx.game_state.winner
+    if winner == "town":
+        winner_text = "TOWN WINS!"
+    elif winner == "mafia":
+        winner_text = "MAFIA WINS!"
+    elif winner == "jester":
+        jester_name = getattr(ctx.game_state, 'winning_jester', 'JESTER')
+        winner_text = f"{jester_name} (JESTER) WINS! Everyone else loses."
+    else:
+        winner_text = f"{winner.upper()} WINS!" if winner else "UNKNOWN WINS!"
+    ctx.add_event("system", winner_text)
     ctx.add_event("system", "")  # Empty line
     ctx.add_event("system", "ROLE REVEAL:")
 

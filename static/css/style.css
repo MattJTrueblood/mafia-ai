@@ -199,6 +199,11 @@ button {
     background-color: #3a1e1e;
 }
 
+.player-card.third_party {
+    border-left-color: #9b59b6;
+    background-color: #2d1f3d;
+}
+
 .player-card.dead {
     border-left-color: #666;
     background-color: #2a2a2a;
@@ -323,6 +328,10 @@ button {
 
 .event-entry .player-name.mafia {
     color: #e74c3c;
+}
+
+.event-entry .player-name.third_party {
+    color: #9b59b6;
 }
 
 /* Event message */

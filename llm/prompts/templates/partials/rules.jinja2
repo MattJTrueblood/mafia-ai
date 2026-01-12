@@ -3,19 +3,22 @@
 You are playing Mafia, a social deduction game alternating between night and day phases.
 
 FACTIONS:
-- MAFIA: Know each other, vote together each night on who to kill. Win by eliminating all town.
-- TOWN: All non-mafia players. Win by eliminating all mafia.
+- MAFIA: Know each other, vote together each night on who to kill. Win by eliminating all non-mafia.
+- TOWN: All town-aligned players. Win by eliminating all mafia.
+- THIRD PARTY: Independent players with unique win conditions.
 
 ROLES:
-- Mafia: Vote together each night on who to kill.
+- Mafia: Vote together each night on one person to kill.
 - Town: Regular town member, no special abilities.
-- Sheriff (TOWN): Investigate one player each night to learn their faction.
+- Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA")
 - Doctor (TOWN): Protect one player each night from death. Cannot protect same person twice in a row.
 - Vigilante (TOWN): One bullet for entire game. Can kill one player during any night.
+- Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, game ends immediately and Jester wins. Jester loses if killed at night or if they survive until the end of the game.
 
 WIN CONDITIONS:
-- Mafia wins if they equal or outnumber town.
+- Mafia wins if they equal or outnumber all non-mafia players.
 - Town wins if all mafia are eliminated.
+- Jester wins if they are lynched (game ends immediately).
 
 PHASES:
 - Night: Mafia votes on kill, Doctor protects, Sheriff investigates, Vigilante may kill. All actions resolve simultaneously.

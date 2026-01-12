@@ -72,6 +72,10 @@
             <button type="button" data-preset="large">Large (12)</button>
             <button type="button" data-preset="violent">Violent (9)</button>
             <button type="button" data-preset="mountainous">Mountainous (11)</button>
+            <button type="button" data-preset="micro_jester">Micro Jester (6)</button>
+            <button type="button" data-preset="classic_jester">Classic Jester (10)</button>
+            <button type="button" data-preset="powderkeg">Powderkeg (9)</button>
+            <button type="button" data-preset="carnival">Carnival (10)</button>
         </div>
 
         <h3>Role Configuration</h3>
@@ -95,6 +99,10 @@
             <div class="role-input">
                 <label>Vigilante:</label>
                 <input type="number" id="role-vigilante" min="0" max="3" value="1">
+            </div>
+            <div class="role-input">
+                <label>Jester:</label>
+                <input type="number" id="role-jester" min="0" max="3" value="0">
             </div>
         </div>
 
@@ -132,13 +140,17 @@
         ];
 
         const PRESETS = {
-            micro:       { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Town: 3 },
-            classic:     { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 0, Town: 3 },
-            standard:    { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 4 },
-            competitive: { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 4 },
-            large:       { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Town: 6 },
-            violent:     { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Town: 4 },
-            mountainous: { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Town: 9 }
+            micro:         { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 0, Town: 3 },
+            classic:       { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Town: 3 },
+            standard:      { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 4 },
+            competitive:   { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 4 },
+            large:         { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 6 },
+            violent:       { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 0, Town: 4 },
+            mountainous:   { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 0, Town: 9 },
+            micro_jester:  { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 1, Town: 3 },
+            classic_jester:{ Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 1, Town: 4 },
+            powderkeg:     { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 1, Town: 3 },
+            carnival:      { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 2, Town: 6 }
         };
 
         function formatPricing(modelId) {
@@ -154,7 +166,8 @@
                  + parseInt(document.getElementById('role-town').value || 0)
                  + parseInt(document.getElementById('role-sheriff').value || 0)
                  + parseInt(document.getElementById('role-doctor').value || 0)
-                 + parseInt(document.getElementById('role-vigilante').value || 0);
+                 + parseInt(document.getElementById('role-vigilante').value || 0)
+                 + parseInt(document.getElementById('role-jester').value || 0);
         }
 
         function getRoleDistribution() {
@@ -163,7 +176,8 @@
                 Town: parseInt(document.getElementById('role-town').value || 0),
                 Sheriff: parseInt(document.getElementById('role-sheriff').value || 0),
                 Doctor: parseInt(document.getElementById('role-doctor').value || 0),
-                Vigilante: parseInt(document.getElementById('role-vigilante').value || 0)
+                Vigilante: parseInt(document.getElementById('role-vigilante').value || 0),
+                Jester: parseInt(document.getElementById('role-jester').value || 0)
             };
         }
 
@@ -176,6 +190,7 @@
             document.getElementById('role-sheriff').value = preset.Sheriff;
             document.getElementById('role-doctor').value = preset.Doctor;
             document.getElementById('role-vigilante').value = preset.Vigilante;
+            document.getElementById('role-jester').value = preset.Jester || 0;
 
             // Update active button
             document.querySelectorAll('.preset-buttons button').forEach(btn => {

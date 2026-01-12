@@ -286,12 +286,12 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
     if index == 0:
         ctx.add_event("system", "Mafia Discussion phase begins.", mafia_visibility)
 
-    if index >= len(mafia_players):
+    if index >= len(mafia_players) * 2: # allow 2 rounds of discussion
         ctx.add_event("system", "Mafia Discussion phase ends.", mafia_visibility)
         ctx.add_event("system", "Mafia vote phase begins.", mafia_visibility)
         return StepResult(next_step="mafia_vote", next_index=0)
 
-    mafia = mafia_players[index]
+    mafia = mafia_players[index % len(mafia_players)]
     previous_messages = ctx.phase_data.get("mafia_discussion_messages", [])
 
     message = execute_mafia_discussion(ctx, mafia, previous_messages)
@@ -461,7 +461,7 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
     if target:
         target_player = ctx.get_player_by_name(target)
         if target_player:
-            result = "mafia" if target_player.team == "mafia" else "town"
+            result = "mafia" if target_player.team == "mafia" else "not mafia"
             sheriff.role.investigations.append((target, result))
 
             ctx.add_event("role_action", f"Sheriff {sheriff.name} investigates {target}.",
