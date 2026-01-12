@@ -31,7 +31,8 @@ class GameRules:
     vigilante_bullets: int = 1           # Number of kills allowed per game
 
     # Day 1 rules
-    day1_is_intro_only: bool = True      # Day 1 is just introductions, no voting
+    day1_round_robin_only: bool = True   # Day 1 discussion is round-robin (no polling)
+    day1_no_lynch: bool = True          # Day 1 has no lynch vote
 
     # Discussion rules
     max_discussion_messages: int = 10    # Max messages before forcing vote
@@ -75,9 +76,14 @@ def get_majority_threshold(alive_count: int) -> int:
     return (alive_count // 2) + 1
 
 
-def is_intro_day(rules: GameRules, day_number: int) -> bool:
-    """Check if this is an introduction-only day (no voting)."""
-    return rules.day1_is_intro_only and day_number == 1
+def is_round_robin_day(rules: GameRules, day_number: int) -> bool:
+    """Check if this day uses round-robin discussion (no polling)."""
+    return rules.day1_round_robin_only and day_number == 1
+
+
+def is_no_lynch_day(rules: GameRules, day_number: int) -> bool:
+    """Check if this day has no lynch vote."""
+    return rules.day1_no_lynch and day_number == 1
 
 
 def get_night_steps_for_role(role_name: str) -> List[str]:

@@ -46,25 +46,33 @@ def get_day_steps(game_state, rules) -> List[str]:
     """
     Build the complete sequence of day steps.
 
-    Day 1 is introduction-only (no voting) if rules.day1_is_intro_only.
+    Controlled by two rules:
+    - day1_round_robin_only: Day 1 uses round-robin intros instead of polling
+    - day1_no_lynch: Day 1 has no lynch vote
     """
-    from .rules import is_intro_day
+    from .rules import is_round_robin_day, is_no_lynch_day
 
-    if is_intro_day(rules, game_state.day_number):
-        return [
-            "day_start",
-            "introduction_message",  # Round-robin intros
-        ]
+    steps = ["day_start"]
 
-    return [
-        "day_start",
-        "scratchpad_day_start",
-        "discussion_poll",      # Polls players for who wants to speak
-        "discussion_message",   # Speaker delivers message
-        "scratchpad_pre_vote",  # Strategic notes before voting
-        "voting",               # Each player votes
-        "voting_resolve",       # Tally votes and resolve
-    ]
+    # Discussion phase: round-robin or polling
+    if is_round_robin_day(rules, game_state.day_number):
+        steps.append("introduction_message")
+    else:
+        steps.extend([
+            "scratchpad_day_start",
+            "discussion_poll",
+            "discussion_message",
+        ])
+
+    # Voting phase (unless no-lynch day)
+    if not is_no_lynch_day(rules, game_state.day_number):
+        steps.extend([
+            "scratchpad_pre_vote",
+            "voting",
+            "voting_resolve",
+        ])
+
+    return steps
 
 
 def get_postgame_steps() -> List[str]:
@@ -124,19 +132,13 @@ def get_phase_transition(game_state, rules) -> Tuple[str, int]:
     Returns:
         (first_step_of_next_phase, 0)
     """
-    from .rules import is_intro_day
-
     if game_state.phase == "night":
         # Night -> Day
         return "day_start", 0
 
     elif game_state.phase == "day":
-        if is_intro_day(rules, game_state.day_number):
-            # Introduction day -> first real night
-            return "night_start", 0
-        else:
-            # Regular day -> night
-            return "night_start", 0
+        # Day -> Night
+        return "night_start", 0
 
     elif game_state.phase == "postgame":
         # Postgame ends at game_end

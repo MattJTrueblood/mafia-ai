@@ -1,23 +1,7 @@
 
 # Roadmap (in order):
 
-## Major game logic (step_processor.py) refactor.  
-
-Goal is to make game logic changes easier and also completely clean up the whole thing.  Keeping in mind:
-
-- possibly adding new roles
-- rules variations
-- simplifying mechanics and iterating with changes
-- readability
-- separation of responsibilites
-
-and so on.  Will be a pretty big deal.  Probably touches game_state.py as well.  Need to make some plans and then act on them later.
-
 ## Roadmap: global rule variation
-
-- **Presets include rules**
-  - Review existing presets
-  - Add rule-varied presets with explicit balance intent
 
 - **Rule variation categories**
 
@@ -26,8 +10,7 @@ and so on.  Will be a pretty big deal.  Probably touches game_state.py as well. 
     - Alignment-only flip
     - No flips
     - Flip on all deaths
-    - Day-kill-only flips
-    - Night-kill-only flips
+    - Filp on lynch only
 
   - **Vote rules**
     - Absolute majority vs plurality lynch
@@ -37,16 +20,11 @@ and so on.  Will be a pretty big deal.  Probably touches game_state.py as well. 
   - **Investigation rules**
     - Alignment result only
     - Full result (alignment + role)
-    - Sanity modifier (sane / insane)
 
   - **Starting role count visibility**
     - Full reveal (exact role counts)
     - Alignment/category only
     - No role list revealed
-
-  - **Action resolution rules**
-    - Fixed priority vs simultaneous resolution
-    - Conflict handling (block/protect/kill order)
 
 ## UI second pass
 

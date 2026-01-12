@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 from . import register_handler, STEP_HANDLERS
 from ..runner import StepResult, StepContext
 from ..game_state import GameState
-from ..rules import is_intro_day, get_majority_threshold, DEFAULT_RULES
+from ..rules import is_round_robin_day, is_no_lynch_day, get_majority_threshold, DEFAULT_RULES
 from ..llm_caller import (
     call_llm, parse_text, parse_vote, parse_turn_poll,
     VOTE_SCHEMA, TURN_POLL_SCHEMA
@@ -277,7 +277,7 @@ def handle_day_start(ctx: StepContext) -> StepResult:
     names = ", ".join([p.name for p in alive])
     ctx.add_event("system", f"Remaining players ({len(alive)}): {names}")
 
-    if is_intro_day(DEFAULT_RULES, ctx.day_number):
+    if is_round_robin_day(ctx.rules, ctx.day_number):
         ctx.add_event("system", "Introduction phase begins. Each player will introduce themselves.")
         if ctx.emit_status:
             ctx.emit_status("introduction_start", message_count=0, max_messages=len(alive))
@@ -292,7 +292,8 @@ def handle_day_start(ctx: StepContext) -> StepResult:
 @register_handler("scratchpad_day_start")
 def handle_scratchpad_day_start(ctx: StepContext) -> StepResult:
     """All players write private strategic notes at day start."""
-    if is_intro_day(DEFAULT_RULES, ctx.day_number):
+    if is_round_robin_day(ctx.rules, ctx.day_number):
+        # Safety guard - shouldn't reach here on round-robin days
         return StepResult(next_step="discussion_poll", next_index=0)
 
     alive_players = ctx.get_alive_players()
@@ -316,7 +317,10 @@ def handle_introduction_message(ctx: StepContext) -> StepResult:
         ctx.add_event("system", "Introduction phase complete.")
         if ctx.emit_status:
             ctx.emit_status("turn_polling", waiting_player=None)
-        return StepResult(next_step="voting", next_index=0)
+        # Check if this day has voting
+        if is_no_lynch_day(ctx.rules, ctx.day_number):
+            return StepResult(next_step="night_start", next_index=0)
+        return StepResult(next_step="scratchpad_pre_vote", next_index=0)
 
     speaker_name = speaker_order[current_idx]
     speaker = ctx.get_player_by_name(speaker_name)

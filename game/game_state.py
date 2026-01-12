@@ -62,13 +62,13 @@ class GameState:
     STEP_MVP_VOTING = "mvp_voting"
     STEP_GAME_END = "game_end"
 
-    def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int] = None):
+    def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int]):
         """
         Initialize game state.
 
         Args:
             players: List of dicts with 'name' and 'model' keys
-            role_distribution: Dict mapping role names to counts
+            role_distribution: Dict mapping role names to counts (from UI presets)
         """
         self.game_id = str(uuid.uuid4())
         self.players = []
@@ -92,10 +92,7 @@ class GameState:
             self.players.append(player)
 
         # Distribute roles
-        if role_distribution:
-            self.distribute_roles(role_distribution)
-        else:
-            self.distribute_roles_default()
+        self.distribute_roles(role_distribution)
 
         # Add initial log entry with role counts
         role_counts = {}
@@ -129,41 +126,6 @@ class GameState:
             "votes": [],
             "round_passes": [],
         }
-
-    def distribute_roles_default(self):
-        """Distribute roles based on player count with sensible defaults."""
-        num_players = len(self.players)
-
-        if num_players == 5:
-            distribution = {"Mafia": 1, "Sheriff": 1, "Town": 3}
-        elif num_players == 6:
-            distribution = {"Mafia": 2, "Sheriff": 1, "Town": 3}
-        elif num_players == 7:
-            distribution = {"Mafia": 2, "Sheriff": 1, "Doctor": 1, "Town": 3}
-        elif num_players == 8:
-            distribution = {"Mafia": 2, "Sheriff": 1, "Doctor": 1, "Town": 4}
-        elif num_players == 9:
-            distribution = {"Mafia": 2, "Sheriff": 1, "Doctor": 1, "Vigilante": 1, "Town": 4}
-        elif num_players == 10:
-            distribution = {"Mafia": 3, "Sheriff": 1, "Doctor": 1, "Town": 5}
-        elif num_players == 11:
-            distribution = {"Mafia": 3, "Sheriff": 1, "Doctor": 1, "Vigilante": 1, "Town": 5}
-        elif num_players == 12:
-            distribution = {"Mafia": 3, "Sheriff": 1, "Doctor": 1, "Vigilante": 1, "Town": 6}
-        elif num_players <= 4:
-            distribution = {"Mafia": 1, "Town": num_players - 1}
-        else:
-            mafia_count = max(2, round(num_players / 4))
-            special_count = 3
-            distribution = {
-                "Mafia": mafia_count,
-                "Sheriff": 1,
-                "Doctor": 1,
-                "Vigilante": 1,
-                "Town": max(1, num_players - mafia_count - special_count),
-            }
-
-        self.distribute_roles(distribution)
 
     def distribute_roles(self, role_distribution: Dict[str, int]):
         """Distribute roles randomly to players."""
