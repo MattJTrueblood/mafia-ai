@@ -5,9 +5,7 @@ let gameStarted = false;
 let isPaused = false;
 let displayedEventCount = 0; // Track how many events we've displayed
 let socket = null;
-let waitingPlayer = null; // Track which player we're waiting for (legacy, used by discussion_status)
-let interruptingPlayers = []; // Track which players want to interrupt
-let passingPlayers = []; // Track which players want to pass their turn
+let waitingPlayer = null; // Track which player we're waiting for (from discussion_status)
 let pendingPlayers = new Set(); // Universal tracking: players with pending API calls
 
 function initializeGame(gameId) {
@@ -28,9 +26,14 @@ function initializeGame(gameId) {
         updateDisplay(gameState);
     });
 
-    // Listen for discussion status updates
+    // Listen for discussion status updates (only track waiting player)
     socket.on('discussion_status', (status) => {
-        updateDiscussionStatus(status);
+        if (status.action === 'discussion_end') {
+            waitingPlayer = null;
+        } else {
+            waitingPlayer = status.waiting_player || null;
+        }
+        updatePlayerIndicators();
     });
 
     // Listen for pause state updates
@@ -126,31 +129,12 @@ function updatePlayers(players) {
             className += ' waiting';
         }
 
-        // Add interrupting class if this player wants to interrupt
-        const isInterrupting = interruptingPlayers.includes(player.name);
-        if (isInterrupting) {
-            className += ' interrupting';
-        }
-
-        // Add passing class if this player wants to pass
-        const isPassing = passingPlayers.includes(player.name);
-        if (isPassing) {
-            className += ' passing';
-        }
-
         const roleDisplay = player.role || 'Unknown';
         const hasContext = player.has_context;
         const hasScratchpad = player.has_scratchpad;
 
         // Build indicator HTML
-        let indicatorHtml = '';
-        if (isWaiting) {
-            indicatorHtml = '<span class="waiting-indicator">...</span>';
-        } else if (isInterrupting) {
-            indicatorHtml = '<span class="interrupt-indicator" title="Wants to interrupt">✋</span>';
-        } else if (isPassing) {
-            indicatorHtml = '<span class="pass-indicator" title="Passing this turn">⏭</span>';
-        }
+        const indicatorHtml = isWaiting ? '<span class="waiting-indicator">...</span>' : '';
 
         card.className = className;
         card.innerHTML = `
@@ -176,171 +160,31 @@ function updatePlayers(players) {
     });
 }
 
-function updateDiscussionStatus(status) {
-    const panel = document.getElementById('discussion-status');
-
-    if (status.action === 'discussion_end') {
-        // Hide panel and clear waiting/interrupt/pass state
-        panel.classList.add('hidden');
-        waitingPlayer = null;
-        interruptingPlayers = [];
-        passingPlayers = [];
-        // Re-render players to remove indicators
-        loadGameState();
-        return;
-    }
-
-    // Show the panel
-    panel.classList.remove('hidden');
-
-    // Update action
-    const actionEl = document.getElementById('status-action');
-    const actionLabels = {
-        'discussion_start': 'Starting discussion',
-        'interrupt_polling': 'Checking for interrupts',
-        'waiting_interrupt': 'Polling interrupt',
-        'waiting_message': 'Getting message',
-        'discussion_paused': 'PAUSED'
-    };
-    actionEl.textContent = actionLabels[status.action] || status.action;
-
-    // Add special styling for paused state
-    if (status.action === 'discussion_paused') {
-        actionEl.classList.add('paused');
-    } else {
-        actionEl.classList.remove('paused');
-    }
-
-    // Update waiting player
-    const waitingEl = document.getElementById('status-waiting');
-    if (status.waiting_player) {
-        waitingEl.textContent = status.waiting_player;
-        waitingEl.classList.add('waiting-highlight');
-        waitingPlayer = status.waiting_player;
-    } else {
-        waitingEl.textContent = '-';
-        waitingEl.classList.remove('waiting-highlight');
-        waitingPlayer = null;
-    }
-
-    // Update message count
-    document.getElementById('status-messages').textContent =
-        `${status.message_count} / ${status.max_messages}`;
-
-    // Update interrupting players
-    const interruptingEl = document.getElementById('status-interrupting');
-    if (status.interrupting_players && status.interrupting_players.length > 0) {
-        interruptingPlayers = status.interrupting_players;
-        interruptingEl.textContent = status.interrupting_players.join(', ');
-        interruptingEl.classList.add('has-items');
-    } else {
-        interruptingPlayers = [];
-        interruptingEl.textContent = '-';
-        interruptingEl.classList.remove('has-items');
-    }
-
-    // Update passing players
-    const passingEl = document.getElementById('status-passing');
-    if (passingEl) {
-        if (status.passing_players && status.passing_players.length > 0) {
-            passingPlayers = status.passing_players;
-            passingEl.textContent = status.passing_players.join(', ');
-            passingEl.classList.add('has-items');
-        } else {
-            passingPlayers = [];
-            passingEl.textContent = '-';
-            passingEl.classList.remove('has-items');
-        }
-    } else if (status.passing_players) {
-        // Element doesn't exist yet, just update the state
-        passingPlayers = status.passing_players;
-    }
-
-    // Update is_interrupt indicator
-    const interruptModeEl = document.getElementById('status-interrupt-mode');
-    if (interruptModeEl) {
-        if (status.is_interrupt) {
-            interruptModeEl.textContent = 'Yes (interrupt)';
-            interruptModeEl.classList.add('is-interrupt');
-        } else {
-            interruptModeEl.textContent = 'No (scheduled turn)';
-            interruptModeEl.classList.remove('is-interrupt');
-        }
-    }
-
-    // Re-render players to show waiting/interrupt indicators
-    updatePlayerIndicators();
-}
-
 function updatePlayerIndicators() {
-    // Update player cards to show/hide waiting, interrupt, and pass indicators
+    // Update player cards to show/hide waiting indicators
     const cards = document.querySelectorAll('.player-card');
     cards.forEach(card => {
         const nameEl = card.querySelector('.player-name');
         if (!nameEl) return;
 
         const playerName = nameEl.textContent;
-        const existingWaitingIndicator = card.querySelector('.waiting-indicator');
-        const existingInterruptIndicator = card.querySelector('.interrupt-indicator');
-        const existingPassIndicator = card.querySelector('.pass-indicator');
+        const existingIndicator = card.querySelector('.waiting-indicator');
 
-        // Check if player has pending API call (universal status) OR is the legacy waitingPlayer
-        const isPending = pendingPlayers.has(playerName) || playerName === waitingPlayer;
+        // Check if player has pending API call or is the waitingPlayer
+        const isWaiting = pendingPlayers.has(playerName) || playerName === waitingPlayer;
 
-        // Handle waiting/pending indicator (highest priority)
-        if (isPending) {
+        if (isWaiting) {
             card.classList.add('waiting');
-            if (!existingWaitingIndicator) {
+            if (!existingIndicator) {
                 const indicator = document.createElement('span');
                 indicator.className = 'waiting-indicator';
                 indicator.textContent = '...';
                 nameEl.after(indicator);
             }
-            // Remove other indicators if showing waiting
-            if (existingInterruptIndicator) existingInterruptIndicator.remove();
-            if (existingPassIndicator) existingPassIndicator.remove();
-            card.classList.remove('interrupting', 'passing');
         } else {
             card.classList.remove('waiting');
-            if (existingWaitingIndicator) {
-                existingWaitingIndicator.remove();
-            }
-
-            // Handle interrupt indicator (second priority)
-            if (interruptingPlayers.includes(playerName)) {
-                card.classList.add('interrupting');
-                if (!existingInterruptIndicator) {
-                    const indicator = document.createElement('span');
-                    indicator.className = 'interrupt-indicator';
-                    indicator.textContent = '✋';
-                    indicator.title = 'Wants to interrupt';
-                    nameEl.after(indicator);
-                }
-                // Remove pass indicator if showing interrupt
-                if (existingPassIndicator) existingPassIndicator.remove();
-                card.classList.remove('passing');
-            } else {
-                card.classList.remove('interrupting');
-                if (existingInterruptIndicator) {
-                    existingInterruptIndicator.remove();
-                }
-
-                // Handle pass indicator (third priority)
-                if (passingPlayers.includes(playerName)) {
-                    card.classList.add('passing');
-                    if (!existingPassIndicator) {
-                        const indicator = document.createElement('span');
-                        indicator.className = 'pass-indicator';
-                        indicator.textContent = '⏭';
-                        indicator.title = 'Passing this turn';
-                        nameEl.after(indicator);
-                    }
-                } else {
-                    card.classList.remove('passing');
-                    if (existingPassIndicator) {
-                        existingPassIndicator.remove();
-                    }
-                }
+            if (existingIndicator) {
+                existingIndicator.remove();
             }
         }
     });

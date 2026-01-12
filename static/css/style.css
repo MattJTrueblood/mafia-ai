@@ -644,62 +644,6 @@ button {
     background-color: #27ae60;
 }
 
-/* Discussion Status Panel */
-.discussion-status {
-    background: #2d2d2d;
-    padding: 15px 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    margin-bottom: 20px;
-    border-left: 4px solid #3498db;
-}
-
-.discussion-status.hidden {
-    display: none;
-}
-
-.discussion-status h3 {
-    color: #3498db;
-    margin: 0 0 12px 0;
-    font-size: 1em;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.status-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 0;
-    font-size: 0.9em;
-}
-
-.status-label {
-    color: #888;
-    min-width: 100px;
-}
-
-.status-value {
-    color: #e0e0e0;
-    font-weight: 500;
-    text-align: right;
-}
-
-.status-value.waiting-highlight {
-    color: #f39c12;
-    animation: pulse 1.5s ease-in-out infinite;
-}
-
-.status-value.queue-list.has-items {
-    color: #e74c3c;
-    font-weight: 600;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
 /* Waiting indicator on player cards */
 .player-card.waiting {
     border-left-color: #f39c12 !important;
@@ -718,59 +662,5 @@ button {
 @keyframes blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
-}
-
-/* Interrupt indicator on player cards */
-.player-card.interrupting {
-    border-left-color: #e74c3c !important;
-    background-color: #3a2020 !important;
-}
-
-.interrupt-indicator {
-    color: #e74c3c;
-    font-size: 1.1em;
-    margin-left: 8px;
-    animation: raise-hand 0.8s ease-in-out infinite;
-}
-
-@keyframes raise-hand {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
-}
-
-/* Pass indicator on player cards */
-.player-card.passing {
-    border-left-color: #95a5a6 !important;
-    background-color: #2a2a2a !important;
-}
-
-.pass-indicator {
-    color: #95a5a6;
-    font-size: 1.1em;
-    margin-left: 8px;
-}
-
-/* Passing players in status panel */
-.status-value.has-items {
-    color: #95a5a6;
-    font-weight: 500;
-}
-
-/* Override for interrupting players (higher priority styling) */
-#status-interrupting.has-items {
-    color: #e74c3c;
-    font-weight: 600;
-}
-
-/* Interrupt mode indicator in status panel */
-.status-value.is-interrupt {
-    color: #e74c3c;
-    font-weight: 600;
-}
-
-.status-value.paused {
-    color: #f39c12;
-    font-weight: 700;
-    animation: pulse 1s ease-in-out infinite;
 }
 
