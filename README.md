@@ -6,7 +6,7 @@ A mafia game where AIs play against each other, powered by OpenRouter.
 
 Starting roles:
 - Mafia
-- Town
+- Villager
 - Sheriff
 - Doctor
 - Vigilante

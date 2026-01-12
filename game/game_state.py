@@ -101,7 +101,7 @@ class GameState:
             role_counts[role_name] = role_counts.get(role_name, 0) + 1
 
         # Build role distribution string in a sensible order
-        role_order = ["mafia", "town", "sheriff", "doctor", "vigilante"]
+        role_order = ["mafia", "villager", "sheriff", "doctor", "vigilante"]
         role_parts = []
         for role in role_order:
             if role in role_counts:
@@ -147,7 +147,7 @@ class GameState:
                 player.role = roles_to_assign[i]
                 player.team = roles_to_assign[i].team
             else:
-                player.role = ROLE_CLASSES["Town"]()
+                player.role = ROLE_CLASSES["Villager"]()
                 player.team = "town"
 
     def get_alive_players(self) -> List[Player]:

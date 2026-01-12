@@ -85,8 +85,8 @@
                 <input type="number" id="role-mafia" min="1" max="10" value="2">
             </div>
             <div class="role-input">
-                <label>Town:</label>
-                <input type="number" id="role-town" min="0" max="20" value="4">
+                <label>Villager:</label>
+                <input type="number" id="role-villager" min="0" max="20" value="4">
             </div>
             <div class="role-input">
                 <label>Sheriff:</label>
@@ -140,17 +140,17 @@
         ];
 
         const PRESETS = {
-            micro:         { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 0, Town: 3 },
-            classic:       { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Town: 3 },
-            standard:      { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 4 },
-            competitive:   { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 4 },
-            large:         { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Town: 6 },
-            violent:       { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 0, Town: 4 },
-            mountainous:   { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 0, Town: 9 },
-            micro_jester:  { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 1, Town: 3 },
-            classic_jester:{ Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 1, Town: 4 },
-            powderkeg:     { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 1, Town: 3 },
-            carnival:      { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 2, Town: 6 }
+            micro:         { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 0, Villager: 3 },
+            classic:       { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Villager: 3 },
+            standard:      { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Villager: 4 },
+            competitive:   { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Villager: 4 },
+            large:         { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Villager: 6 },
+            violent:       { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 0, Villager: 4 },
+            mountainous:   { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 0, Villager: 9 },
+            micro_jester:  { Mafia: 1, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 1, Villager: 3 },
+            classic_jester:{ Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 1, Villager: 4 },
+            powderkeg:     { Mafia: 2, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 1, Villager: 3 },
+            carnival:      { Mafia: 2, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 2, Villager: 6 }
         };
 
         function formatPricing(modelId) {
@@ -163,7 +163,7 @@
 
         function getTotalPlayers() {
             return parseInt(document.getElementById('role-mafia').value || 0)
-                 + parseInt(document.getElementById('role-town').value || 0)
+                 + parseInt(document.getElementById('role-villager').value || 0)
                  + parseInt(document.getElementById('role-sheriff').value || 0)
                  + parseInt(document.getElementById('role-doctor').value || 0)
                  + parseInt(document.getElementById('role-vigilante').value || 0)
@@ -173,7 +173,7 @@
         function getRoleDistribution() {
             return {
                 Mafia: parseInt(document.getElementById('role-mafia').value || 0),
-                Town: parseInt(document.getElementById('role-town').value || 0),
+                Villager: parseInt(document.getElementById('role-villager').value || 0),
                 Sheriff: parseInt(document.getElementById('role-sheriff').value || 0),
                 Doctor: parseInt(document.getElementById('role-doctor').value || 0),
                 Vigilante: parseInt(document.getElementById('role-vigilante').value || 0),
@@ -186,7 +186,7 @@
             if (!preset) return;
 
             document.getElementById('role-mafia').value = preset.Mafia;
-            document.getElementById('role-town').value = preset.Town;
+            document.getElementById('role-villager').value = preset.Villager;
             document.getElementById('role-sheriff').value = preset.Sheriff;
             document.getElementById('role-doctor').value = preset.Doctor;
             document.getElementById('role-vigilante').value = preset.Vigilante;

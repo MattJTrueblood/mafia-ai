@@ -27,11 +27,11 @@ class Mafia(Role):
         self.team = "mafia"
 
 
-class Town(Role):
-    """Town role - basic town member with no special abilities."""
-    
+class Villager(Role):
+    """Villager role - basic town member with no special abilities."""
+
     def __init__(self):
-        super().__init__("Town")
+        super().__init__("Villager")
         self.team = "town"
 
 
@@ -82,7 +82,7 @@ class Jester(Role):
 # Role registry
 ROLE_CLASSES = {
     "Mafia": Mafia,
-    "Town": Town,
+    "Villager": Villager,
     "Sheriff": Sheriff,
     "Doctor": Doctor,
     "Vigilante": Vigilante,
