@@ -57,6 +57,45 @@
             font-size: 14px;
             color: #888;
         }
+        .human-player-config {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        .human-player-config label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .human-player-config input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+        .human-options {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .human-options.visible {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .human-option {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .human-option label {
+            font-size: 13px;
+            color: #aaa;
+        }
+        .human-option select {
+            min-width: 150px;
+        }
     </style>
 </head>
 <body>
@@ -103,6 +142,29 @@
             <div class="role-input">
                 <label>Jester:</label>
                 <input type="number" id="role-jester" min="0" max="3" value="0">
+            </div>
+        </div>
+
+        <h3>Human Player (Optional)</h3>
+        <div class="human-player-config">
+            <label>
+                <input type="checkbox" id="enable-human">
+                Play as a human player
+            </label>
+            <div id="human-options" class="human-options">
+                <div class="human-option">
+                    <label>Play as:</label>
+                    <select id="human-player-select">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div class="human-option">
+                    <label>Force role:</label>
+                    <select id="human-role-select">
+                        <option value="">Random</option>
+                        <!-- Populated by JS based on role distribution -->
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -225,6 +287,40 @@
             }
 
             document.getElementById('player-count-text').textContent = `${total} players`;
+            updateHumanPlayerOptions();
+        }
+
+        function updateHumanPlayerOptions() {
+            const playerSelect = document.getElementById('human-player-select');
+            const roleSelect = document.getElementById('human-role-select');
+
+            // Update player dropdown with current player names
+            const playerNames = [];
+            document.querySelectorAll('#players-container input[type="text"]').forEach(input => {
+                if (input.value) {
+                    playerNames.push(input.value);
+                }
+            });
+
+            const currentPlayer = playerSelect.value;
+            playerSelect.innerHTML = playerNames.map(name => {
+                const selected = name === currentPlayer ? ' selected' : '';
+                return `<option value="${name}"${selected}>${name}</option>`;
+            }).join('');
+
+            // Update role dropdown based on role distribution
+            const roles = getRoleDistribution();
+            const currentRole = roleSelect.value;
+            let roleOptions = '<option value="">Random</option>';
+
+            if (roles.Mafia > 0) roleOptions += `<option value="Mafia"${currentRole === 'Mafia' ? ' selected' : ''}>Mafia</option>`;
+            if (roles.Villager > 0) roleOptions += `<option value="Villager"${currentRole === 'Villager' ? ' selected' : ''}>Villager</option>`;
+            if (roles.Sheriff > 0) roleOptions += `<option value="Sheriff"${currentRole === 'Sheriff' ? ' selected' : ''}>Sheriff</option>`;
+            if (roles.Doctor > 0) roleOptions += `<option value="Doctor"${currentRole === 'Doctor' ? ' selected' : ''}>Doctor</option>`;
+            if (roles.Vigilante > 0) roleOptions += `<option value="Vigilante"${currentRole === 'Vigilante' ? ' selected' : ''}>Vigilante</option>`;
+            if (roles.Jester > 0) roleOptions += `<option value="Jester"${currentRole === 'Jester' ? ' selected' : ''}>Jester</option>`;
+
+            roleSelect.innerHTML = roleOptions;
         }
 
         function addPlayerRow(num, name, selectedModel) {
@@ -292,6 +388,24 @@
         // Random models button
         document.getElementById('random-models-btn').addEventListener('click', randomizeModels);
 
+        // Human player toggle
+        document.getElementById('enable-human').addEventListener('change', (e) => {
+            const humanOptions = document.getElementById('human-options');
+            if (e.target.checked) {
+                humanOptions.classList.add('visible');
+                updateHumanPlayerOptions();
+            } else {
+                humanOptions.classList.remove('visible');
+            }
+        });
+
+        // Update human player dropdown when player names change
+        document.getElementById('players-container').addEventListener('input', (e) => {
+            if (e.target.type === 'text') {
+                updateHumanPlayerOptions();
+            }
+        });
+
         // Form submission
         document.getElementById('setup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -315,11 +429,33 @@
 
             const roleDistribution = getRoleDistribution();
 
+            // Get human player settings if enabled
+            const enableHuman = document.getElementById('enable-human').checked;
+            let humanPlayerName = null;
+            let forcedRole = null;
+
+            if (enableHuman) {
+                humanPlayerName = document.getElementById('human-player-select').value;
+                forcedRole = document.getElementById('human-role-select').value || null;
+
+                // Validate human player selection
+                if (!humanPlayerName) {
+                    showError('Please select which player you want to be');
+                    return;
+                }
+                console.log('Human player settings:', { humanPlayerName, forcedRole });
+            }
+
             try {
                 const response = await fetch('/start_game', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ players, role_distribution: roleDistribution })
+                    body: JSON.stringify({
+                        players,
+                        role_distribution: roleDistribution,
+                        human_player_name: humanPlayerName,
+                        forced_role: forcedRole
+                    })
                 });
 
                 const data = await response.json();

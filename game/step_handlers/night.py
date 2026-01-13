@@ -5,6 +5,7 @@ All handlers for night-time actions: mafia discussion/vote, doctor, sheriff, vig
 """
 
 import logging
+import gevent
 from datetime import datetime
 from typing import List
 
@@ -35,8 +36,13 @@ def get_mafia_visibility(game_state: GameState) -> List[str]:
 
 
 def should_write_night_scratchpad(player) -> bool:
-    """Determine if player should write scratchpad at night start."""
+    """Determine if AI player should write scratchpad at night start.
+
+    Human players don't write scratchpad notes.
+    """
     if not player.alive:
+        return False
+    if player.is_human:
         return False
     role_name = player.role.name if player.role else None
     return role_name in ["Doctor", "Sheriff", "Vigilante", "Mafia"]
@@ -278,7 +284,7 @@ def handle_scratchpad_night_start(ctx: StepContext) -> StepResult:
 
 @register_handler("mafia_discussion")
 def handle_mafia_discussion(ctx: StepContext) -> StepResult:
-    """Mafia members discuss who to kill."""
+    """Mafia members discuss who to kill. Waits for human input if mafia member is human."""
     mafia_players = ctx.get_players_by_role("Mafia")
     mafia_visibility = get_mafia_visibility(ctx.game_state)
     index = ctx.step_index
@@ -294,7 +300,26 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
     mafia = mafia_players[index % len(mafia_players)]
     previous_messages = ctx.phase_data.get("mafia_discussion_messages", [])
 
-    message = execute_mafia_discussion(ctx, mafia, previous_messages)
+    message = None
+
+    # Check if this mafia member is human
+    if mafia.is_human:
+        alive_names = [p.name for p in ctx.get_alive_players()]
+        ctx.game_state.set_waiting_for_human("discussion", {"label": "Mafia Discussion"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "discussion":
+            message = human_input.get("message", "").strip()[:1000]
+        if not message:
+            message = "(says nothing)"
+    else:
+        message = execute_mafia_discussion(ctx, mafia, previous_messages)
+
     ctx.phase_data["mafia_discussion_messages"].append({
         "player": mafia.name,
         "message": message
@@ -308,11 +333,46 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
 
 @register_handler("mafia_vote")
 def handle_mafia_vote(ctx: StepContext) -> StepResult:
-    """Mafia members vote on kill target (parallel)."""
+    """Mafia members vote on kill target. Human mafia votes first, then AI in parallel."""
     mafia_players = ctx.get_players_by_role("Mafia")
     mafia_visibility = get_mafia_visibility(ctx.game_state)
     discussion_messages = ctx.phase_data.get("mafia_discussion_messages", [])
     alive_names = [p.name for p in ctx.get_alive_players()]
+
+    results = []
+
+    # Check if any mafia member is human
+    human_mafia = None
+    for mafia in mafia_players:
+        if mafia.is_human:
+            human_mafia = mafia
+            break
+
+    if human_mafia:
+        # Wait for human mafia vote first
+        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Vote to Kill"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        target = None
+        if human_input and human_input.get("type") == "role_action":
+            target = human_input.get("target")
+            if target == "ABSTAIN":
+                target = None
+            elif target and target not in alive_names:
+                target = None
+
+        vote_msg = f"[Mafia Vote] {human_mafia.name} votes to kill {target}" if target else f"[Mafia Vote] {human_mafia.name} abstains"
+        ctx.add_event("mafia_chat", vote_msg, mafia_visibility, player=human_mafia.name, priority=7)
+
+        results.append({"player": human_mafia.name, "target": target})
+
+    # AI mafia vote in parallel
+    ai_mafia = [m for m in mafia_players if not m.is_human]
 
     def vote_func(mafia):
         prompt = build_mafia_vote_prompt(ctx.game_state, mafia, [], discussion_messages)
@@ -334,7 +394,10 @@ def handle_mafia_vote(ctx: StepContext) -> StepResult:
 
         return {"player": mafia.name, "target": target}
 
-    results = execute_parallel(mafia_players, vote_func, ctx)
+    if ai_mafia:
+        ai_results = execute_parallel(ai_mafia, vote_func, ctx)
+        results.extend(ai_results)
+
     ctx.phase_data["mafia_votes"] = results
 
     tally_mafia_votes(ctx.game_state)
@@ -352,7 +415,7 @@ def handle_mafia_vote(ctx: StepContext) -> StepResult:
 
 @register_handler("doctor_discuss")
 def handle_doctor_discuss(ctx: StepContext) -> StepResult:
-    """Doctor thinks through protection options."""
+    """Doctor thinks through protection options. Skips discussion for human players."""
     doctor_players = [p for p in ctx.get_players_by_role("Doctor") if p.alive]
     index = ctx.step_index
 
@@ -369,16 +432,18 @@ def handle_doctor_discuss(ctx: StepContext) -> StepResult:
         all_doctor_names = [p.name for p in doctor_players]
         ctx.add_event("system", "Doctor night phase begins.", all_doctor_names)
 
-    discussion = execute_role_discussion(ctx, doctor, "doctor")
-    ctx.add_event("role_action", f"[Doctor Discussion] {doctor.name}: {discussion}",
-                  doctor_visibility, player=doctor.name, priority=6)
+    # Skip discussion for human players (they don't need to think out loud)
+    if not doctor.is_human:
+        discussion = execute_role_discussion(ctx, doctor, "doctor")
+        ctx.add_event("role_action", f"[Doctor Discussion] {doctor.name}: {discussion}",
+                      doctor_visibility, player=doctor.name, priority=6)
 
     return StepResult(next_step="doctor_discuss", next_index=index + 1)
 
 
 @register_handler("doctor_act")
 def handle_doctor_act(ctx: StepContext) -> StepResult:
-    """Doctor chooses who to protect."""
+    """Doctor chooses who to protect. Waits for human input if doctor is human."""
     doctor_players = [p for p in ctx.get_players_by_role("Doctor") if p.alive]
     index = ctx.step_index
 
@@ -390,8 +455,28 @@ def handle_doctor_act(ctx: StepContext) -> StepResult:
 
     doctor = doctor_players[index]
     doctor_visibility = [doctor.name]
+    alive_names = [p.name for p in ctx.get_alive_players()]
 
-    target = execute_role_action(ctx, doctor, "doctor")
+    target = None
+
+    # Check if doctor is human
+    if doctor.is_human:
+        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Protect Someone"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "role_action":
+            target = human_input.get("target")
+            if target == "ABSTAIN":
+                target = None
+            elif target and target not in alive_names:
+                target = None
+    else:
+        target = execute_role_action(ctx, doctor, "doctor")
 
     if target:
         can_protect, reason = can_doctor_protect(DEFAULT_RULES, doctor.role, target)
@@ -417,7 +502,7 @@ def handle_doctor_act(ctx: StepContext) -> StepResult:
 
 @register_handler("sheriff_discuss")
 def handle_sheriff_discuss(ctx: StepContext) -> StepResult:
-    """Sheriff thinks through investigation options."""
+    """Sheriff thinks through investigation options. Skips discussion for human players."""
     sheriff_players = [p for p in ctx.get_players_by_role("Sheriff") if p.alive]
     index = ctx.step_index
 
@@ -434,16 +519,18 @@ def handle_sheriff_discuss(ctx: StepContext) -> StepResult:
         all_sheriff_names = [p.name for p in sheriff_players]
         ctx.add_event("system", "Sheriff night phase begins.", all_sheriff_names)
 
-    discussion = execute_role_discussion(ctx, sheriff, "sheriff")
-    ctx.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {discussion}",
-                  sheriff_visibility, player=sheriff.name, priority=6)
+    # Skip discussion for human players
+    if not sheriff.is_human:
+        discussion = execute_role_discussion(ctx, sheriff, "sheriff")
+        ctx.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {discussion}",
+                      sheriff_visibility, player=sheriff.name, priority=6)
 
     return StepResult(next_step="sheriff_discuss", next_index=index + 1)
 
 
 @register_handler("sheriff_act")
 def handle_sheriff_act(ctx: StepContext) -> StepResult:
-    """Sheriff investigates a player."""
+    """Sheriff investigates a player. Waits for human input if sheriff is human."""
     sheriff_players = [p for p in ctx.get_players_by_role("Sheriff") if p.alive]
     index = ctx.step_index
 
@@ -455,8 +542,28 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
 
     sheriff = sheriff_players[index]
     sheriff_visibility = [sheriff.name]
+    alive_names = [p.name for p in ctx.get_alive_players()]
 
-    target = execute_role_action(ctx, sheriff, "sheriff")
+    target = None
+
+    # Check if sheriff is human
+    if sheriff.is_human:
+        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Investigate Someone"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "role_action":
+            target = human_input.get("target")
+            if target == "ABSTAIN":
+                target = None
+            elif target and target not in alive_names:
+                target = None
+    else:
+        target = execute_role_action(ctx, sheriff, "sheriff")
 
     if target:
         target_player = ctx.get_player_by_name(target)
@@ -470,10 +577,12 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
                          sheriff_visibility, player=sheriff.name, priority=8,
                          metadata={"target": target, "result": result})
 
-            reaction = execute_sheriff_post_investigation(ctx, sheriff, target, result)
-            if reaction:
-                ctx.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {reaction}",
-                             sheriff_visibility, player=sheriff.name, priority=9)
+            # Only AI sheriff gets post-investigation reaction
+            if not sheriff.is_human:
+                reaction = execute_sheriff_post_investigation(ctx, sheriff, target, result)
+                if reaction:
+                    ctx.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {reaction}",
+                                 sheriff_visibility, player=sheriff.name, priority=9)
 
     return StepResult(next_step="sheriff_act", next_index=index + 1)
 
@@ -484,7 +593,7 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
 
 @register_handler("vigilante_discuss")
 def handle_vigilante_discuss(ctx: StepContext) -> StepResult:
-    """Vigilante thinks through options."""
+    """Vigilante thinks through options. Skips discussion for human players."""
     # Cache eligible vigilantes at start of phase
     if "vigilante_eligible" not in ctx.phase_data:
         ctx.phase_data["vigilante_eligible"] = [
@@ -509,16 +618,18 @@ def handle_vigilante_discuss(ctx: StepContext) -> StepResult:
         all_vig_names = [p.name for p in vigilante_players]
         ctx.add_event("system", "Vigilante night phase begins.", all_vig_names)
 
-    discussion = execute_role_discussion(ctx, vigilante, "vigilante")
-    ctx.add_event("role_action", f"[Vigilante Discussion] {vigilante.name}: {discussion}",
-                  vigilante_visibility, player=vigilante.name, priority=6)
+    # Skip discussion for human players
+    if not vigilante.is_human:
+        discussion = execute_role_discussion(ctx, vigilante, "vigilante")
+        ctx.add_event("role_action", f"[Vigilante Discussion] {vigilante.name}: {discussion}",
+                      vigilante_visibility, player=vigilante.name, priority=6)
 
     return StepResult(next_step="vigilante_discuss", next_index=index + 1)
 
 
 @register_handler("vigilante_act")
 def handle_vigilante_act(ctx: StepContext) -> StepResult:
-    """Vigilante decides whether to shoot."""
+    """Vigilante decides whether to shoot. Waits for human input if vigilante is human."""
     if "vigilante_eligible" not in ctx.phase_data:
         ctx.phase_data["vigilante_eligible"] = [
             p.name for p in ctx.get_players_by_role("Vigilante")
@@ -537,8 +648,28 @@ def handle_vigilante_act(ctx: StepContext) -> StepResult:
 
     vigilante = vigilante_players[index]
     vigilante_visibility = [vigilante.name]
+    alive_names = [p.name for p in ctx.get_alive_players()]
 
-    target = execute_role_action(ctx, vigilante, "vigilante")
+    target = None
+
+    # Check if vigilante is human
+    if vigilante.is_human:
+        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Shoot Someone (or Pass)"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "role_action":
+            target = human_input.get("target")
+            if target == "ABSTAIN":
+                target = None
+            elif target and target not in alive_names:
+                target = None
+    else:
+        target = execute_role_action(ctx, vigilante, "vigilante")
 
     if target:
         vigilante.role.bullet_used = True

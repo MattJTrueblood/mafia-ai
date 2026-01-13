@@ -115,9 +115,13 @@ def get_discussion_message(ctx: StepContext, player, is_interrupt: bool, is_resp
 
 
 def poll_for_turn_actions(ctx: StepContext, exclude_player: str) -> tuple:
-    """Poll all players to see who wants to interrupt, respond, or pass."""
+    """Poll all AI players to see who wants to interrupt, respond, or pass.
+
+    Human players are excluded from polling - they opt-in via interrupt button.
+    """
     alive = ctx.get_alive_players()
-    players_to_poll = [p for p in alive if p.name != exclude_player]
+    # Exclude both the specified player AND any human players (they opt-in via interrupt)
+    players_to_poll = [p for p in alive if p.name != exclude_player and not p.is_human]
 
     if not players_to_poll:
         return [], [], []
@@ -297,18 +301,20 @@ def handle_day_start(ctx: StepContext) -> StepResult:
 
 @register_handler("scratchpad_day_start")
 def handle_scratchpad_day_start(ctx: StepContext) -> StepResult:
-    """All players write private strategic notes at day start."""
+    """All AI players write private strategic notes at day start."""
     if is_round_robin_day(ctx.rules, ctx.day_number):
         # Safety guard - shouldn't reach here on round-robin days
         return StepResult(next_step="discussion_poll", next_index=0)
 
-    alive_players = ctx.get_alive_players()
+    # Only AI players write scratchpad notes
+    ai_players = [p for p in ctx.get_alive_players() if not p.is_human]
 
     def scratchpad_func(player):
         return execute_scratchpad_writing(ctx, player, "day_start")
 
-    execute_parallel(alive_players, scratchpad_func, ctx)
-    ctx.add_event("system", "Players wrote strategic notes.")
+    if ai_players:
+        execute_parallel(ai_players, scratchpad_func, ctx)
+        ctx.add_event("system", "Players wrote strategic notes.")
 
     return StepResult(next_step="discussion_poll", next_index=0)
 
@@ -334,10 +340,32 @@ def handle_introduction_message(ctx: StepContext) -> StepResult:
     if not speaker or not speaker.alive:
         return StepResult(next_step="introduction_message", next_index=current_idx + 1)
 
+    logging.info(f"Introduction turn for {speaker_name}, is_human={speaker.is_human}")
+
     if ctx.emit_status:
         ctx.emit_status("waiting_message", waiting_player=speaker_name, is_interrupt=False, is_respond=False)
 
-    introduction = get_introduction_message(ctx, speaker)
+    introduction = None
+
+    # Check if this is a human player
+    if speaker.is_human:
+        logging.info(f"Human player {speaker_name} - waiting for input")
+
+        ctx.game_state.set_waiting_for_human("discussion", {"label": "Introduce yourself"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        logging.info(f"Human input received for {speaker_name}: {human_input}")
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "discussion":
+            introduction = human_input.get("message", "").strip()[:500]
+        else:
+            logging.warning(f"No valid human input for {speaker_name}, human_input={human_input}")
+    else:
+        introduction = get_introduction_message(ctx, speaker)
 
     if introduction:
         ctx.add_event("discussion", introduction, "public", player=speaker_name,
@@ -374,6 +402,16 @@ def handle_discussion_poll(ctx: StepContext) -> StepResult:
         ctx.add_event("system", f"Day {ctx.day_number} discussion phase ends.")
         return StepResult(next_step="scratchpad_pre_vote", next_index=0)
 
+    # Check if human has requested interrupt - they get priority
+    if ctx.game_state.human_interrupt_requested and ctx.game_state.is_human_alive():
+        ctx.game_state.human_interrupt_requested = False  # Clear the request
+        human_name = ctx.game_state.human_player_name
+        ctx.phase_data["next_speaker"] = human_name
+        ctx.phase_data["is_interrupt"] = True
+        ctx.phase_data["is_respond"] = False
+        logging.info(f"[POLL] Human interrupt priority: {human_name}")
+        return StepResult(next_step="discussion_message", next_index=len(messages))
+
     speaker_order = ctx.phase_data.get("speaker_order", [])
     speaker_idx = ctx.phase_data.get("current_speaker_index", 0)
 
@@ -384,7 +422,7 @@ def handle_discussion_poll(ctx: StepContext) -> StepResult:
 
     last_speaker = ctx.phase_data.get("last_speaker", None)
 
-    # Find next valid speaker
+    # Find next valid speaker (excluding human - they opt-in via interrupt)
     current_speaker_name = None
     current_speaker = None
     attempts = 0
@@ -392,7 +430,8 @@ def handle_discussion_poll(ctx: StepContext) -> StepResult:
         candidate_name = speaker_order[speaker_idx % len(speaker_order)]
         candidate = ctx.get_player_by_name(candidate_name)
 
-        if candidate and candidate.alive and candidate_name != last_speaker:
+        # Skip human players - they opt-in via interrupt button, not rotation
+        if candidate and candidate.alive and candidate_name != last_speaker and not candidate.is_human:
             current_speaker_name = candidate_name
             current_speaker = candidate
             break
@@ -412,7 +451,15 @@ def handle_discussion_poll(ctx: StepContext) -> StepResult:
     if ctx.emit_status:
         ctx.emit_status("turn_polling", waiting_player=None)
 
+    # Poll AI players only (exclude human from polling)
     interrupting, responding, passing = poll_for_turn_actions(ctx, last_speaker)
+
+    # Filter out human player from poll results (they shouldn't be there anyway, but safety check)
+    human_name = ctx.game_state.human_player_name
+    if human_name:
+        interrupting = [p for p in interrupting if p != human_name]
+        responding = [p for p in responding if p != human_name]
+        passing = [p for p in passing if p != human_name]
 
     logging.info(f"[POLL] Results: interrupting={interrupting}, responding={responding}, passing={passing}")
 
@@ -450,7 +497,8 @@ def handle_discussion_poll(ctx: StepContext) -> StepResult:
             candidate_name = speaker_order[search_idx % len(speaker_order)]
             candidate = ctx.get_player_by_name(candidate_name)
 
-            if candidate and candidate.alive and candidate_name != last_speaker:
+            # Skip human players in rotation
+            if candidate and candidate.alive and candidate_name != last_speaker and not candidate.is_human:
                 if candidate_name not in round_passes:
                     chosen_speaker = candidate_name
                     ctx.phase_data["current_speaker_index"] = search_idx
@@ -488,7 +536,23 @@ def handle_discussion_message(ctx: StepContext) -> StepResult:
     if ctx.emit_status:
         ctx.emit_status("waiting_message", waiting_player=speaker_name, is_interrupt=is_interrupt, is_respond=is_respond)
 
-    message = get_discussion_message(ctx, speaker, is_interrupt, is_respond)
+    message = None
+
+    # Check if this is a human player
+    if speaker.is_human:
+        # Wait for human input
+        ctx.game_state.set_waiting_for_human("discussion", {"is_interrupt": is_interrupt})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "discussion":
+            message = human_input.get("message", "").strip()[:500]
+    else:
+        message = get_discussion_message(ctx, speaker, is_interrupt, is_respond)
 
     if message:
         msg_index = len(ctx.phase_data["discussion_messages"])
@@ -526,14 +590,16 @@ def handle_discussion_message(ctx: StepContext) -> StepResult:
 
 @register_handler("scratchpad_pre_vote")
 def handle_scratchpad_pre_vote(ctx: StepContext) -> StepResult:
-    """Players write strategic notes before voting."""
-    alive_players = ctx.get_alive_players()
+    """AI players write strategic notes before voting."""
+    # Only AI players write scratchpad notes
+    ai_players = [p for p in ctx.get_alive_players() if not p.is_human]
 
     def scratchpad_func(player):
         return execute_scratchpad_writing(ctx, player, "pre_vote")
 
-    execute_parallel(alive_players, scratchpad_func, ctx)
-    ctx.add_event("system", "Players wrote strategic notes.")
+    if ai_players:
+        execute_parallel(ai_players, scratchpad_func, ctx)
+        ctx.add_event("system", "Players wrote strategic notes.")
 
     if ctx.emit_status:
         ctx.emit_status("turn_polling", waiting_player=None)
@@ -547,11 +613,47 @@ def handle_scratchpad_pre_vote(ctx: StepContext) -> StepResult:
 
 @register_handler("voting")
 def handle_voting(ctx: StepContext) -> StepResult:
-    """All players vote on who to lynch (parallel)."""
+    """All players vote on who to lynch. Human votes first, then AI in parallel."""
     alive_players = ctx.get_alive_players()
     alive_names = [p.name for p in alive_players]
 
     ctx.add_event("system", f"Day {ctx.day_number} voting phase begins.")
+
+    results = []
+
+    # Check if there's a human player who needs to vote
+    human_player = ctx.game_state.get_human_player()
+    if human_player and human_player.alive:
+        # Wait for human vote first
+        ctx.game_state.set_waiting_for_human("vote", {"options": alive_names})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "vote":
+            vote_target = human_input.get("target", "abstain")
+            explanation = human_input.get("explanation", "")
+
+            if vote_target != "abstain" and vote_target not in alive_names:
+                vote_target = "abstain"
+
+            if vote_target != "abstain":
+                msg = f"I vote to lynch {vote_target}."
+            else:
+                msg = "I abstain from voting."
+            if explanation:
+                msg += f" {explanation}"
+
+            ctx.add_event("vote", msg, "all", player=human_player.name, priority=8,
+                         metadata={"target": vote_target})
+
+            results.append({"player": human_player.name, "vote": vote_target, "explanation": explanation})
+
+    # Now get AI player votes in parallel
+    ai_players = [p for p in alive_players if not p.is_human]
 
     def vote_func(player):
         prompt = build_day_voting_prompt(ctx.game_state, player)
@@ -580,7 +682,8 @@ def handle_voting(ctx: StepContext) -> StepResult:
 
         return {"player": player.name, "vote": vote_target, "explanation": explanation}
 
-    results = execute_parallel(alive_players, vote_func, ctx)
+    ai_results = execute_parallel(ai_players, vote_func, ctx)
+    results.extend(ai_results)
     ctx.phase_data["votes"] = results
 
     return StepResult(next_step="voting_resolve", next_index=0)

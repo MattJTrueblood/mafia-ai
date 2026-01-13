@@ -673,3 +673,153 @@ button {
     50% { opacity: 0; }
 }
 
+/* Unknown role player cards (for human games with hidden roles) */
+.player-card.unknown-role {
+    border-left-color: #6c6c6c;
+    background-color: #252525;
+}
+
+/* "(You)" indicator for human player */
+.you-indicator {
+    color: #4a9eff;
+    font-weight: 600;
+    font-size: 0.85em;
+    margin-left: 4px;
+}
+
+/* Reveal All button */
+.btn-reveal {
+    background-color: #555;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.btn-reveal:hover {
+    background-color: #666;
+}
+
+.btn-reveal.active {
+    background-color: #8e44ad;
+    color: white;
+}
+
+/* Human Controls Section */
+#human-controls {
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 20px;
+    border: 2px solid #4a9eff;
+}
+
+#human-controls h4 {
+    color: #4a9eff;
+    margin: 0 0 12px 0;
+    font-size: 1em;
+}
+
+/* Interrupt Button */
+#interrupt-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-interrupt {
+    background-color: #e74c3c;
+    color: white;
+    font-weight: 600;
+    padding: 12px 24px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.btn-interrupt:hover {
+    background-color: #c0392b;
+}
+
+.btn-interrupt:disabled {
+    background-color: #555;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(231, 76, 60, 0);
+    }
+}
+
+#interrupt-status {
+    color: #f39c12;
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+/* Discussion Input */
+#discussion-input,
+#vote-input,
+#role-input {
+    background-color: #1a1a1a;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #4a9eff;
+}
+
+#discussion-input textarea,
+#vote-input textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    margin-bottom: 10px;
+}
+
+#discussion-input textarea:focus,
+#vote-input textarea:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
+.input-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.input-actions button {
+    flex: 1;
+    margin: 0;
+}
+
+/* Vote Input */
+#vote-input select,
+#role-input select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+#vote-input select:focus,
+#role-input select:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
+#vote-input button,
+#role-input button {
+    width: 100%;
+    margin: 0;
+}
+

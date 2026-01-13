@@ -41,6 +41,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 games = {}
 
+# Track human input per game: game_id -> {"input": None, "event": Event}
+game_human_input = {}
+
 
 class GameControl:
     """Control state for a running game loop."""
@@ -61,8 +64,13 @@ initialize_logging(log_dir="logs", log_level=logging.INFO)
 
 
 def emit_game_state_update(game_id, game_state):
-    """Emit game state update to all clients watching this game."""
-    socketio.emit('game_state_update', game_state.to_dict(), room=game_id)
+    """Emit game state update to all clients watching this game.
+
+    If there's a human player, filter visibility based on their role.
+    """
+    has_human = game_state.has_human_player()
+    state_dict = game_state.to_dict(for_human=has_human)
+    socketio.emit('game_state_update', state_dict, room=game_id)
 
 
 def emit_discussion_status(game_id, status):
@@ -84,24 +92,80 @@ def emit_player_status(game_id, player_name, status):
     socketio.emit('player_status', {'player': player_name, 'status': status}, room=game_id)
 
 
+def ensure_human_input_tracking(game_id: str):
+    """Ensure human input tracking is initialized for a game.
+
+    This should be called before wait_for_human_input to guarantee tracking exists.
+    """
+    if game_id not in game_human_input:
+        logging.info(f"Initializing human input tracking for game {game_id}")
+        game_human_input[game_id] = {"input": None}
+
+
+def wait_for_human_input(game_id: str):
+    """Wait indefinitely for human input.
+
+    Returns:
+        The human input dict, or None if cancelled
+    """
+    # Ensure tracking exists
+    ensure_human_input_tracking(game_id)
+
+    logging.info(f"Waiting for human input in game {game_id}, tracking_id={id(game_human_input.get(game_id))}")
+
+    poll_count = 0
+    # Poll for input instead of using Event - avoids stale reference issues
+    while True:
+        if game_id not in game_human_input:
+            logging.warning(f"Tracking disappeared for game {game_id}")
+            return None
+
+        tracking = game_human_input[game_id]
+        result = tracking.get("input")
+
+        poll_count += 1
+        if poll_count % 50 == 0:  # Log every 5 seconds
+            logging.info(f"Still polling for input in game {game_id}, poll #{poll_count}, tracking_id={id(tracking)}, input={result}")
+
+        if result is not None:
+            tracking["input"] = None
+            logging.info(f"Received human input in game {game_id}: {result}")
+            return result
+
+        # Yield to other greenlets and check again
+        gevent.sleep(0.1)
+
+
 def cleanup_game(game_id):
     """Clean up a game completely - stop loop, delete all state."""
+    logging.info(f"cleanup_game called for {game_id}")
+
     if game_id not in games:
+        logging.info(f"Game {game_id} not in games, skipping cleanup")
         return
 
+    # Don't cleanup if game loop is still running
     if game_id in game_controls:
         control = game_controls[game_id]
+        if control.is_running:
+            logging.info(f"Game {game_id} still running, not cleaning up")
+            return
         if control.loop_greenlet and not control.loop_greenlet.dead:
             control.pause_event.set()
             control.cancel_event.set()
             control.loop_greenlet.kill()
         del game_controls[game_id]
 
+    logging.info(f"Cleaning up game {game_id}")
+
     if game_id in games:
         del games[game_id]
 
     if game_id in game_clients:
         del game_clients[game_id]
+
+    if game_id in game_human_input:
+        del game_human_input[game_id]
 
 
 def game_loop(game_id: str):
@@ -135,12 +199,20 @@ def game_loop(game_id: str):
                 def player_status_callback(player_name, status):
                     emit_player_status(game_id, player_name, status)
 
+                def game_state_callback():
+                    emit_game_state_update(game_id, game_state)
+
+                def human_input_callback():
+                    return wait_for_human_input(game_id)
+
                 run_step(
                     game_state=game_state,
                     llm_client=llm_client,
                     rules=DEFAULT_RULES,
                     emit_status=status_callback,
                     emit_player_status=player_status_callback,
+                    emit_game_state=game_state_callback,
+                    wait_for_human=human_input_callback,
                     cancel_event=control.cancel_event,
                 )
 
@@ -182,13 +254,35 @@ def start_game():
     data = request.json
     players = data.get("players", [])
     role_distribution = data.get("role_distribution")
+    human_player_name = data.get("human_player_name")  # Optional
+    forced_role = data.get("forced_role")  # Optional
+
+    # Normalize empty string to None
+    if human_player_name == "":
+        human_player_name = None
+    if forced_role == "":
+        forced_role = None
+
+    logging.info(f"Starting game: human_player_name={human_player_name!r}, forced_role={forced_role!r}")
 
     if len(players) < 3:
         return jsonify({"error": "Need at least 3 players"}), 400
 
-    game_state = GameState(players, role_distribution=role_distribution)
+    game_state = GameState(
+        players,
+        role_distribution=role_distribution,
+        human_player_name=human_player_name,
+        forced_role=forced_role
+    )
     games[game_state.game_id] = game_state
-    
+
+    # Initialize human input tracking if there's a human player
+    if human_player_name:
+        game_human_input[game_state.game_id] = {"input": None}
+        logging.info(f"Initialized human input tracking for game {game_state.game_id}")
+    else:
+        logging.info(f"No human player for game {game_state.game_id}")
+
     return jsonify({"game_id": game_state.game_id, "redirect": url_for("game_view", game_id=game_state.game_id)})
 
 
@@ -220,14 +314,100 @@ def handle_disconnect():
             cleanup_game(game_id)
 
 
+# Human player WebSocket handlers
+
+@socketio.on('human_discussion')
+def handle_human_discussion(data):
+    """Handle human player's discussion message."""
+    game_id = data.get('game_id')
+    message = data.get('message', '')
+
+    logging.info(f"handle_human_discussion: game_id={game_id}, message={message[:50] if message else ''}")
+    logging.info(f"game_human_input keys: {list(game_human_input.keys())}")
+
+    if game_id in game_human_input:
+        tracking = game_human_input[game_id]
+        tracking["input"] = {
+            "type": "discussion",
+            "message": message.strip()[:500]  # Limit message length
+        }
+        logging.info(f"Set human input for game {game_id}, tracking_id={id(tracking)}, input={tracking['input']}")
+    else:
+        logging.warning(f"game_id {game_id} not found in game_human_input")
+
+
+@socketio.on('human_vote')
+def handle_human_vote(data):
+    """Handle human player's vote."""
+    game_id = data.get('game_id')
+    target = data.get('target', 'abstain')
+    explanation = data.get('explanation', '')
+
+    logging.info(f"handle_human_vote: game_id={game_id}, target={target}")
+
+    if game_id in game_human_input:
+        game_human_input[game_id]["input"] = {
+            "type": "vote",
+            "target": target,
+            "explanation": explanation.strip()[:200]
+        }
+        logging.info(f"Set human vote for game {game_id}")
+    else:
+        logging.warning(f"game_id {game_id} not found in game_human_input")
+
+
+@socketio.on('human_role_action')
+def handle_human_role_action(data):
+    """Handle human player's role action (mafia vote, doctor protect, etc.)."""
+    game_id = data.get('game_id')
+    target = data.get('target')
+
+    logging.info(f"handle_human_role_action: game_id={game_id}, target={target}")
+
+    if game_id in game_human_input:
+        game_human_input[game_id]["input"] = {
+            "type": "role_action",
+            "target": target
+        }
+        logging.info(f"Set human role action for game {game_id}")
+    else:
+        logging.warning(f"game_id {game_id} not found in game_human_input")
+
+
+@socketio.on('human_interrupt')
+def handle_human_interrupt(data):
+    """Handle human player's interrupt request during day discussion."""
+    game_id = data.get('game_id')
+
+    if game_id in games:
+        game_state = games[game_id]
+        game_state.human_interrupt_requested = True
+        # Emit updated state so frontend knows interrupt was registered
+        emit_game_state_update(game_id, game_state)
+
+
+@socketio.on('toggle_reveal')
+def handle_toggle_reveal(data):
+    """Toggle the reveal-all mode for testing."""
+    game_id = data.get('game_id')
+
+    if game_id in games:
+        game_state = games[game_id]
+        # Only allow toggle if there's a human player
+        if game_state.has_human_player():
+            game_state.reveal_all = not game_state.reveal_all
+            emit_game_state_update(game_id, game_state)
+
+
 @app.route("/game/<game_id>")
 def game_view(game_id):
     """Game view page."""
     if game_id not in games:
         return "Game not found", 404
-    
+
     game_state = games[game_id]
-    return render_template("game.html", game_id=game_id, game_state=game_state.to_dict())
+    has_human = game_state.has_human_player()
+    return render_template("game.html", game_id=game_id, game_state=game_state.to_dict(for_human=has_human))
 
 
 @app.route("/game/<game_id>/state")
@@ -237,7 +417,8 @@ def get_game_state(game_id):
         return jsonify({"error": "Game not found"}), 404
 
     game_state = games[game_id]
-    return jsonify(game_state.to_dict())
+    has_human = game_state.has_human_player()
+    return jsonify(game_state.to_dict(for_human=has_human))
 
 
 @app.route("/game/<game_id>/player/<player_name>/context")

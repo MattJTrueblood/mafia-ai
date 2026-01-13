@@ -8,12 +8,34 @@ let socket = null;
 let waitingPlayer = null; // Track which player we're waiting for (from discussion_status)
 let pendingPlayers = new Set(); // Universal tracking: players with pending API calls
 
+// Human player state
+let humanPlayerName = null;
+let humanRole = null;
+let humanTeam = null;
+let humanAlive = true;
+let isRevealAll = false;
+let waitingForHuman = false;
+let humanInputType = null;
+let humanInputContext = {};
+let humanInterruptRequested = false;
+let currentPhase = 'day';
+let currentStep = null;
+let isGameOver = false;
+
 function initializeGame(gameId) {
     currentGameId = gameId;
 
     // Set up event listeners
     document.getElementById('start-btn').addEventListener('click', handleStart);
     document.getElementById('pause-btn').addEventListener('click', handlePause);
+
+    // Human control event listeners
+    document.getElementById('reveal-btn').addEventListener('click', handleToggleReveal);
+    document.getElementById('interrupt-btn').addEventListener('click', handleInterrupt);
+    document.getElementById('send-message').addEventListener('click', handleSendMessage);
+    document.getElementById('pass-turn').addEventListener('click', handlePassTurn);
+    document.getElementById('cast-vote').addEventListener('click', handleCastVote);
+    document.getElementById('submit-action').addEventListener('click', handleSubmitAction);
     
     // Connect to WebSocket
     socket = io();
@@ -83,11 +105,62 @@ function updateDisplay(gameState) {
     // Update phase and day
     document.getElementById('phase').textContent = gameState.phase;
     document.getElementById('day').textContent = gameState.day_number;
-    
+    currentPhase = gameState.phase;
+    currentStep = gameState.current_step;
+    isGameOver = gameState.game_over;
+
+    // Update human player state
+    humanPlayerName = gameState.human_player_name;
+    isRevealAll = gameState.reveal_all;
+    waitingForHuman = gameState.waiting_for_human;
+    humanInputType = gameState.human_input_type;
+    humanInputContext = gameState.human_input_context || {};
+    humanInterruptRequested = gameState.human_interrupt_requested;
+
+    // Find human player's role/team/alive status
+    if (humanPlayerName) {
+        const humanPlayer = gameState.players.find(p => p.name === humanPlayerName);
+        if (humanPlayer) {
+            humanRole = humanPlayer.role;
+            humanTeam = humanPlayer.team;
+            humanAlive = humanPlayer.alive;
+        }
+    }
+
+    // Show/hide reveal button for human games
+    const revealBtn = document.getElementById('reveal-btn');
+    if (humanPlayerName) {
+        revealBtn.style.display = 'inline-block';
+        revealBtn.textContent = isRevealAll ? 'Hide Info' : 'Reveal All';
+        revealBtn.classList.toggle('active', isRevealAll);
+    } else {
+        revealBtn.style.display = 'none';
+    }
+
+    // Show/hide human controls container
+    const humanControls = document.getElementById('human-controls');
+    console.log('Human state:', {
+        humanPlayerName,
+        humanAlive,
+        waitingForHuman,
+        humanInputType,
+        humanInputContext,
+        gameOver: gameState.game_over
+    });
+    if (humanPlayerName && humanAlive && !gameState.game_over) {
+        humanControls.style.display = 'block';
+        updateHumanInputUI(gameState);
+    } else {
+        humanControls.style.display = 'none';
+    }
+
     // Update game status
     const statusEl = document.getElementById('game-status');
     if (gameState.game_over) {
-        statusEl.textContent = `Game Over! ${gameState.winner === 'mafia' ? 'Mafia' : 'Town'} wins!`;
+        let winnerText = 'Town';
+        if (gameState.winner === 'mafia') winnerText = 'Mafia';
+        else if (gameState.winner === 'jester') winnerText = 'Jester';
+        statusEl.textContent = `Game Over! ${winnerText} wins!`;
         statusEl.className = 'status game-over';
         document.getElementById('start-btn').disabled = true;
         document.getElementById('start-btn').textContent = 'Game Over';
@@ -99,7 +172,7 @@ function updateDisplay(gameState) {
         statusEl.textContent = 'Ready to start';
         statusEl.className = 'status';
     }
-    
+
     // Update players
     updatePlayers(gameState.players);
 
@@ -115,8 +188,13 @@ function updatePlayers(players) {
         const card = document.createElement('div');
         let className = 'player-card';
 
+        // Check if role is hidden (shown as "???")
+        const isRoleHidden = player.role === '???';
+
         if (!player.alive) {
             className += ' dead';
+        } else if (isRoleHidden) {
+            className += ' unknown-role';
         } else if (player.team === 'mafia') {
             className += ' mafia';
         } else if (player.team === 'town') {
@@ -125,9 +203,34 @@ function updatePlayers(players) {
             className += ' third_party';
         }
 
-        // Add waiting class if this player has a pending API call
-        const isWaiting = pendingPlayers.has(player.name) || waitingPlayer === player.name;
-        if (isWaiting) {
+        // Determine if we should show waiting indicator
+        // For human games: only show indicators the human should see
+        const isWaitingRaw = pendingPlayers.has(player.name) || waitingPlayer === player.name;
+        let shouldShowWaiting = isWaitingRaw;
+
+        if (humanPlayerName && !isRevealAll && humanAlive && !isGameOver) {
+            // Filter waiting indicators based on what human should see
+            // During night: only show for actions human knows about
+            if (currentPhase === 'night') {
+                if (humanTeam === 'mafia') {
+                    // Mafia can see mafia discussion/voting waiting
+                    const isMafiaStep = currentStep?.startsWith('mafia_');
+                    if (!isMafiaStep) {
+                        shouldShowWaiting = false;
+                    }
+                } else if (humanRole === 'Doctor' || humanRole === 'Sheriff' || humanRole === 'Vigilante') {
+                    // Special roles only see their own action
+                    if (player.name !== humanPlayerName) {
+                        shouldShowWaiting = false;
+                    }
+                } else {
+                    // Villagers see nothing at night
+                    shouldShowWaiting = false;
+                }
+            }
+        }
+
+        if (shouldShowWaiting) {
             className += ' waiting';
         }
 
@@ -136,11 +239,15 @@ function updatePlayers(players) {
         const hasScratchpad = player.has_scratchpad;
 
         // Build indicator HTML
-        const indicatorHtml = isWaiting ? '<span class="waiting-indicator">...</span>' : '';
+        const indicatorHtml = shouldShowWaiting ? '<span class="waiting-indicator">...</span>' : '';
+
+        // Add "(You)" indicator for human player
+        const youIndicator = player.name === humanPlayerName ? '<span class="you-indicator">(You)</span>' : '';
 
         card.className = className;
         card.innerHTML = `
             <span class="player-name">${escapeHtml(player.name)}</span>
+            ${youIndicator}
             ${indicatorHtml}
             <span class="player-role">${escapeHtml(roleDisplay)}</span>
             <span class="player-model">${escapeHtml(player.model)}</span>
@@ -175,7 +282,10 @@ function updatePlayerIndicators() {
         // Check if player has pending API call or is the waitingPlayer
         const isWaiting = pendingPlayers.has(playerName) || playerName === waitingPlayer;
 
-        if (isWaiting) {
+        // But don't show waiting indicators during night phase when there's a human player and visibility is hidden
+        const shouldShowWaiting = !(humanPlayerName && currentPhase === 'night' && !isRevealAll)
+
+        if (isWaiting && shouldShowWaiting) {
             card.classList.add('waiting');
             if (!existingIndicator) {
                 const indicator = document.createElement('span');
@@ -562,6 +672,168 @@ async function showPlayerScratchpad(playerName) {
 
 function closeScratchpadModal() {
     document.getElementById('scratchpad-modal').classList.remove('active');
+}
+
+// Human Input UI Functions
+function updateHumanInputUI(gameState) {
+    const interruptControl = document.getElementById('interrupt-control');
+    const discussionInput = document.getElementById('discussion-input');
+    const voteInput = document.getElementById('vote-input');
+    const roleInput = document.getElementById('role-input');
+    const interruptStatus = document.getElementById('interrupt-status');
+
+    console.log('updateHumanInputUI called:', { waitingForHuman, humanInputType, humanAlive, isGameOver });
+
+    // Hide all by default
+    interruptControl.style.display = 'none';
+    discussionInput.style.display = 'none';
+    voteInput.style.display = 'none';
+    roleInput.style.display = 'none';
+
+    if (!humanAlive || isGameOver) return;
+
+    // Check if waiting for human input
+    if (waitingForHuman) {
+        console.log('Showing human input UI for type:', humanInputType);
+        if (humanInputType === 'discussion') {
+            discussionInput.style.display = 'block';
+            // Update the header with the label if provided
+            const header = discussionInput.querySelector('h4');
+            if (header) {
+                header.textContent = humanInputContext.label || 'Your Turn to Speak';
+            }
+            document.getElementById('message-text').focus();
+        } else if (humanInputType === 'vote') {
+            voteInput.style.display = 'block';
+            populateVoteOptions(humanInputContext.options || []);
+        } else if (humanInputType === 'role_action') {
+            roleInput.style.display = 'block';
+            document.getElementById('role-action-label').textContent = humanInputContext.label || 'Choose Target';
+            populateRoleOptions(humanInputContext.options || [], humanInputContext.label);
+        }
+    } else {
+        // Show interrupt button during day discussion when human is not speaking
+        const isDayDiscussion = currentPhase === 'day' &&
+            (currentStep === 'discussion_poll' || currentStep === 'discussion_message' ||
+             currentStep?.startsWith('discussion_'));
+
+        if (isDayDiscussion && gameState.day_number > 1) {
+            interruptControl.style.display = 'block';
+            if (humanInterruptRequested) {
+                interruptStatus.textContent = 'Waiting for your turn...';
+                document.getElementById('interrupt-btn').disabled = true;
+            } else {
+                interruptStatus.textContent = '';
+                document.getElementById('interrupt-btn').disabled = false;
+            }
+        }
+    }
+}
+
+function populateVoteOptions(options) {
+    const select = document.getElementById('vote-target');
+    select.innerHTML = '<option value="abstain">Abstain</option>';
+    options.forEach(name => {
+        // Can vote for anyone except yourself
+        if (name !== humanPlayerName) {
+            select.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+        }
+    });
+}
+
+function populateRoleOptions(options, label) {
+    const select = document.getElementById('role-target');
+    select.innerHTML = '';
+
+    // Add abstain option for vigilante and mafia vote
+    const allowAbstain = label && (label.includes('Shoot') || label.includes('Vote to Kill'));
+    if (allowAbstain) {
+        select.innerHTML += '<option value="ABSTAIN">Pass / Abstain</option>';
+    }
+
+    // Mafia and vigilante can't target themselves, others can
+    const cantTargetSelf = label && (label.includes('Shoot') || label.includes('Vote to Kill'));
+
+    options.forEach(name => {
+        if (cantTargetSelf && name === humanPlayerName) {
+            return; // Skip self for mafia/vigilante
+        }
+        select.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+    });
+}
+
+// Human Action Handlers
+function handleToggleReveal() {
+    if (!socket || !currentGameId) return;
+    socket.emit('toggle_reveal', { game_id: currentGameId });
+}
+
+function handleInterrupt() {
+    if (!socket || !currentGameId) return;
+    socket.emit('human_interrupt', { game_id: currentGameId });
+    document.getElementById('interrupt-btn').disabled = true;
+    document.getElementById('interrupt-status').textContent = 'Requesting turn...';
+}
+
+function handleSendMessage() {
+    console.log('handleSendMessage called', { socket: !!socket, currentGameId });
+    if (!socket || !currentGameId) {
+        console.log('Early return: no socket or gameId');
+        return;
+    }
+    const message = document.getElementById('message-text').value.trim();
+    if (!message) {
+        console.log('Early return: empty message');
+        return;
+    }
+
+    console.log('Emitting human_discussion:', { game_id: currentGameId, message });
+    socket.emit('human_discussion', {
+        game_id: currentGameId,
+        message: message
+    });
+
+    document.getElementById('message-text').value = '';
+    document.getElementById('discussion-input').style.display = 'none';
+}
+
+function handlePassTurn() {
+    if (!socket || !currentGameId) return;
+
+    socket.emit('human_discussion', {
+        game_id: currentGameId,
+        message: ''  // Empty message = pass
+    });
+
+    document.getElementById('message-text').value = '';
+    document.getElementById('discussion-input').style.display = 'none';
+}
+
+function handleCastVote() {
+    if (!socket || !currentGameId) return;
+    const target = document.getElementById('vote-target').value;
+    const explanation = document.getElementById('vote-explanation').value.trim();
+
+    socket.emit('human_vote', {
+        game_id: currentGameId,
+        target: target,
+        explanation: explanation
+    });
+
+    document.getElementById('vote-explanation').value = '';
+    document.getElementById('vote-input').style.display = 'none';
+}
+
+function handleSubmitAction() {
+    if (!socket || !currentGameId) return;
+    const target = document.getElementById('role-target').value;
+
+    socket.emit('human_role_action', {
+        game_id: currentGameId,
+        target: target
+    });
+
+    document.getElementById('role-input').style.display = 'none';
 }
 
 function formatTimestamp(isoString) {

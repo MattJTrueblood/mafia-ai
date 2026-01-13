@@ -37,6 +37,8 @@ class StepContext:
     emit_status: Callable = None           # emit_status(status_type, **kwargs)
     emit_player_status: Callable = None    # emit_player_status(player_name, status)
     emit_event: Callable = None            # emit_event(event_dict)
+    emit_game_state: Callable = None       # emit_game_state() - emit current game state
+    wait_for_human: Callable = None        # wait_for_human() - wait for human input
 
     # Cancellation support for pause/resume
     cancel_event: Any = None  # gevent.Event or similar
@@ -98,6 +100,8 @@ def run_step(
     emit_status: Callable = None,
     emit_player_status: Callable = None,
     emit_event: Callable = None,
+    emit_game_state: Callable = None,
+    wait_for_human: Callable = None,
     cancel_event = None,
 ) -> StepResult:
     """
@@ -113,6 +117,8 @@ def run_step(
         emit_status: Callback for UI status updates
         emit_player_status: Callback for player-specific status
         emit_event: Callback for game events
+        emit_game_state: Callback to emit full game state
+        wait_for_human: Callback to wait for human input
         cancel_event: Event to check for pause requests
 
     Returns:
@@ -129,6 +135,8 @@ def run_step(
         emit_status=emit_status,
         emit_player_status=emit_player_status,
         emit_event=emit_event,
+        emit_game_state=emit_game_state,
+        wait_for_human=wait_for_human,
         cancel_event=cancel_event,
     )
 

@@ -9,18 +9,20 @@ from .roles import Role, ROLE_CLASSES
 class Player:
     """Represents a player in the game."""
 
-    def __init__(self, name: str, model: str, role: Optional[Role] = None):
+    def __init__(self, name: str, model: str, role: Optional[Role] = None, is_human: bool = False):
         self.name = name
         self.model = model
         self.role = role
         self.alive = True
         self.team = role.team if role else None
+        self.is_human = is_human  # True if this is a human player
         self.last_llm_context = None  # Stores most recent LLM prompt/response for debugging
         self.scratchpad = []  # Private strategic notes written at key decision points
 
     def __repr__(self):
         status = "alive" if self.alive else "dead"
-        return f"Player(name={self.name}, role={self.role}, {status})"
+        human_tag = " (HUMAN)" if self.is_human else ""
+        return f"Player(name={self.name}, role={self.role}, {status}{human_tag})"
 
 
 class GameState:
@@ -62,13 +64,16 @@ class GameState:
     STEP_MVP_VOTING = "mvp_voting"
     STEP_GAME_END = "game_end"
 
-    def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int]):
+    def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int],
+                 human_player_name: Optional[str] = None, forced_role: Optional[str] = None):
         """
         Initialize game state.
 
         Args:
             players: List of dicts with 'name' and 'model' keys
             role_distribution: Dict mapping role names to counts (from UI presets)
+            human_player_name: Optional name of the human player
+            forced_role: Optional role to force-assign to the human player
         """
         self.game_id = str(uuid.uuid4())
         self.players = []
@@ -86,9 +91,19 @@ class GameState:
         # Phase-specific accumulated data (will be initialized after role distribution)
         self.phase_data = {}
 
+        # Human player state
+        self.human_player_name = human_player_name
+        self.forced_role = forced_role
+        self.reveal_all = False  # Toggle for testing - reveals all info
+        self.waiting_for_human = False  # True when waiting for human input
+        self.human_input_type = None  # "discussion", "vote", "mafia_vote", "role_action", etc.
+        self.human_input_context = {}  # Options/metadata for current input request
+        self.human_interrupt_requested = False  # True when human wants to speak in day discussion
+
         # Create player objects
         for player_data in players:
-            player = Player(player_data["name"], player_data["model"])
+            is_human = human_player_name and player_data["name"] == human_player_name
+            player = Player(player_data["name"], player_data["model"], is_human=is_human)
             self.players.append(player)
 
         # Distribute roles
@@ -128,7 +143,7 @@ class GameState:
         }
 
     def distribute_roles(self, role_distribution: Dict[str, int]):
-        """Distribute roles randomly to players."""
+        """Distribute roles randomly to players, with optional forced role for human player."""
         roles_to_assign = []
         for role_name, count in role_distribution.items():
             if role_name not in ROLE_CLASSES:
@@ -140,12 +155,26 @@ class GameState:
         if not has_mafia and len(roles_to_assign) > 0:
             roles_to_assign[0] = ROLE_CLASSES["Mafia"]()
 
+        # Handle forced role for human player
+        human_role = None
+        if self.forced_role and self.human_player_name and self.forced_role in ROLE_CLASSES:
+            # Find and remove one instance of the forced role from the pool
+            for i, role in enumerate(roles_to_assign):
+                if role.name == self.forced_role:
+                    human_role = roles_to_assign.pop(i)
+                    break
+
         random.shuffle(roles_to_assign)
 
-        for i, player in enumerate(self.players):
-            if i < len(roles_to_assign):
-                player.role = roles_to_assign[i]
-                player.team = roles_to_assign[i].team
+        for player in self.players:
+            # Assign forced role to human player
+            if player.is_human and human_role:
+                player.role = human_role
+                player.team = human_role.team
+            elif roles_to_assign:
+                role = roles_to_assign.pop()
+                player.role = role
+                player.team = role.team
             else:
                 player.role = ROLE_CLASSES["Villager"]()
                 player.team = "town"
@@ -164,6 +193,42 @@ class GameState:
             if player.name == name:
                 return player
         return None
+
+    def get_human_player(self) -> Optional[Player]:
+        """Get the human player if one exists."""
+        if self.human_player_name:
+            return self.get_player_by_name(self.human_player_name)
+        return None
+
+    def is_human_alive(self) -> bool:
+        """Check if human player is still alive."""
+        human = self.get_human_player()
+        return human is not None and human.alive
+
+    def should_auto_reveal(self) -> bool:
+        """Check if visibility should be automatically revealed (human dead or game over)."""
+        if self.game_over:
+            return True
+        human = self.get_human_player()
+        if human and not human.alive:
+            return True
+        return False
+
+    def has_human_player(self) -> bool:
+        """Check if this game has a human player."""
+        return self.human_player_name is not None
+
+    def set_waiting_for_human(self, input_type: str, context: dict = None):
+        """Set state to wait for human input."""
+        self.waiting_for_human = True
+        self.human_input_type = input_type
+        self.human_input_context = context or {}
+
+    def clear_waiting_for_human(self):
+        """Clear human input waiting state."""
+        self.waiting_for_human = False
+        self.human_input_type = None
+        self.human_input_context = {}
 
     def add_event(self, event_type: str, message: str, visibility: Union[str, List[str]] = "all",
                   player: str = None, priority: int = None, metadata: dict = None) -> dict:
@@ -229,27 +294,86 @@ class GameState:
             "round_passes": [],  # Tracks players who passed in current round - prevents infinite polling
         }
 
-    def to_dict(self) -> Dict:
-        """Convert game state to dictionary for JSON serialization."""
+    def to_dict(self, for_human: bool = False) -> Dict:
+        """Convert game state to dictionary for JSON serialization.
+
+        Args:
+            for_human: If True, filter based on human player visibility rules
+        """
+        human_player = self.get_human_player() if for_human else None
+        # Should we hide info? Only if for_human mode, human exists, human is alive, and reveal_all is off
+        should_hide = (for_human and human_player and human_player.alive
+                       and not self.reveal_all and not self.should_auto_reveal())
+
+        players_data = []
+        for p in self.players:
+            player_dict = {
+                "name": p.name,
+                "model": p.model,
+                "alive": p.alive,
+                "has_context": p.last_llm_context is not None,
+                "has_scratchpad": hasattr(p, 'scratchpad') and len(p.scratchpad) > 0,
+                "is_human": p.is_human,
+            }
+
+            # Visibility logic for roles
+            if should_hide:
+                if p.name == human_player.name:
+                    # Human sees their own role
+                    player_dict["role"] = p.role.name if p.role else None
+                    player_dict["team"] = p.team
+                elif human_player.team == "mafia" and p.team == "mafia":
+                    # Mafia sees fellow mafia
+                    player_dict["role"] = p.role.name if p.role else None
+                    player_dict["team"] = p.team
+                else:
+                    # Hide other roles
+                    player_dict["role"] = "???"
+                    player_dict["team"] = "unknown"
+            else:
+                player_dict["role"] = p.role.name if p.role else None
+                player_dict["team"] = p.team
+
+            players_data.append(player_dict)
+
+        # Filter events based on visibility
+        if should_hide:
+            visible_events = self._filter_events_for_human(human_player)
+        else:
+            visible_events = self.events
+
         return {
             "game_id": self.game_id,
             "phase": self.phase,
             "day_number": self.day_number,
             "current_step": self.current_step,
             "step_index": self.step_index,
-            "players": [
-                {
-                    "name": p.name,
-                    "model": p.model,
-                    "role": p.role.name if p.role else None,
-                    "alive": p.alive,
-                    "team": p.team,
-                    "has_context": p.last_llm_context is not None,
-                    "has_scratchpad": hasattr(p, 'scratchpad') and len(p.scratchpad) > 0
-                }
-                for p in self.players
-            ],
-            "events": self.events,
+            "players": players_data,
+            "events": visible_events,
             "winner": self.winner,
-            "game_over": self.game_over
+            "game_over": self.game_over,
+            # Human player state
+            "human_player_name": self.human_player_name,
+            "waiting_for_human": self.waiting_for_human,
+            "human_input_type": self.human_input_type,
+            "human_input_context": self.human_input_context,
+            "reveal_all": self.reveal_all,
+            "human_interrupt_requested": self.human_interrupt_requested,
         }
+
+    def _filter_events_for_human(self, human_player: Player) -> List[Dict]:
+        """Filter events based on human player's visibility."""
+        if not human_player:
+            return self.events
+
+        visible = []
+        for event in self.events:
+            visibility = event.get("visibility", "all")
+
+            if visibility in ("all", "public"):
+                visible.append(event)
+            elif isinstance(visibility, list) and human_player.name in visibility:
+                visible.append(event)
+            # Events with other visibility values are hidden from human
+
+        return visible

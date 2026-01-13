@@ -20,6 +20,43 @@
                 <div id="controls">
                     <button id="start-btn" class="btn-primary">Start Game</button>
                     <button id="pause-btn" class="btn-pause" disabled>Pause</button>
+                    <button id="reveal-btn" class="btn-reveal" style="display: none;">Reveal All</button>
+                </div>
+
+                <!-- Human Player Controls -->
+                <div id="human-controls" style="display: none;">
+                    <!-- Interrupt Button (shown during AI discussion) -->
+                    <div id="interrupt-control" style="display: none;">
+                        <button id="interrupt-btn" class="btn-interrupt">I Want to Speak</button>
+                        <span id="interrupt-status"></span>
+                    </div>
+
+                    <!-- Discussion Input -->
+                    <div id="discussion-input" style="display: none;">
+                        <h4>Your Turn to Speak</h4>
+                        <textarea id="message-text" placeholder="Type your message..." rows="3"></textarea>
+                        <div class="input-actions">
+                            <button id="send-message" class="btn-primary">Send</button>
+                            <button id="pass-turn" class="btn-secondary">Pass</button>
+                        </div>
+                    </div>
+
+                    <!-- Vote Input -->
+                    <div id="vote-input" style="display: none;">
+                        <h4>Cast Your Vote</h4>
+                        <select id="vote-target">
+                            <option value="abstain">Abstain</option>
+                        </select>
+                        <textarea id="vote-explanation" placeholder="Explanation (optional)..." rows="2"></textarea>
+                        <button id="cast-vote" class="btn-primary">Cast Vote</button>
+                    </div>
+
+                    <!-- Role Action Input -->
+                    <div id="role-input" style="display: none;">
+                        <h4 id="role-action-label">Choose Target</h4>
+                        <select id="role-target"></select>
+                        <button id="submit-action" class="btn-primary">Confirm</button>
+                    </div>
                 </div>
 
                 <div id="players-section">
