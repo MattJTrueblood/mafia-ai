@@ -15,6 +15,7 @@ env/
 # Claude assistant files
 .claude/
 .claude
+tmpclaude*
 
 # Debug outputs
 *debug*

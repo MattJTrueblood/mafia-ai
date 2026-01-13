@@ -761,7 +761,8 @@ button {
 /* Discussion Input */
 #discussion-input,
 #vote-input,
-#role-input {
+#role-input,
+#mvp-vote-input {
     background-color: #1a1a1a;
     padding: 15px;
     border-radius: 4px;
@@ -769,7 +770,8 @@ button {
 }
 
 #discussion-input textarea,
-#vote-input textarea {
+#vote-input textarea,
+#mvp-vote-input textarea {
     width: 100%;
     padding: 10px;
     border: 1px solid #555;
@@ -783,7 +785,8 @@ button {
 }
 
 #discussion-input textarea:focus,
-#vote-input textarea:focus {
+#vote-input textarea:focus,
+#mvp-vote-input textarea:focus {
     outline: none;
     border-color: #4a9eff;
 }
@@ -800,7 +803,8 @@ button {
 
 /* Vote Input */
 #vote-input select,
-#role-input select {
+#role-input select,
+#mvp-vote-input select {
     width: 100%;
     padding: 10px;
     border: 1px solid #555;
@@ -812,13 +816,15 @@ button {
 }
 
 #vote-input select:focus,
-#role-input select:focus {
+#role-input select:focus,
+#mvp-vote-input select:focus {
     outline: none;
     border-color: #4a9eff;
 }
 
 #vote-input button,
-#role-input button {
+#role-input button,
+#mvp-vote-input button {
     width: 100%;
     margin: 0;
 }
