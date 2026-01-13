@@ -294,6 +294,16 @@ class GameState:
             "round_passes": [],  # Tracks players who passed in current round - prevents infinite polling
         }
 
+    def start_postgame_phase(self):
+        """Initialize state for postgame phase."""
+        self.phase = "postgame"
+        self.current_step = self.STEP_POSTGAME_REVEAL
+        self.step_index = 0
+        self.phase_data = {
+            "postgame_messages": [],
+            "mvp_votes": [],
+        }
+
     def to_dict(self, for_human: bool = False) -> Dict:
         """Convert game state to dictionary for JSON serialization.
 

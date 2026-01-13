@@ -701,11 +701,13 @@ def handle_voting_resolve(ctx: StepContext) -> StepResult:
 
     # Check for Jester win (set during resolve_voting) or normal win
     if ctx.game_state.winner:
+        ctx.game_state.start_postgame_phase()
         return StepResult(next_step="postgame_reveal", next_index=0)
 
     winner = check_win_conditions(ctx.game_state)
     if winner:
         ctx.game_state.winner = winner
+        ctx.game_state.start_postgame_phase()
         return StepResult(next_step="postgame_reveal", next_index=0)
 
     ctx.game_state.start_night_phase()

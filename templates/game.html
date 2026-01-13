@@ -57,6 +57,14 @@
                         <select id="role-target"></select>
                         <button id="submit-action" class="btn-primary">Confirm</button>
                     </div>
+
+                    <!-- MVP Vote Input -->
+                    <div id="mvp-vote-input" style="display: none;">
+                        <h4>Vote for MVP</h4>
+                        <select id="mvp-target"></select>
+                        <textarea id="mvp-reason" placeholder="Why? (optional)..." rows="2"></textarea>
+                        <button id="mvp-vote-btn" class="btn-primary" onclick="handleMvpVote()">Cast MVP Vote</button>
+                    </div>
                 </div>
 
                 <div id="players-section">

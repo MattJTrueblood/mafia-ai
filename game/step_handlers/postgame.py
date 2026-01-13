@@ -130,7 +130,30 @@ def handle_postgame_discussion(ctx: StepContext) -> StepResult:
         return StepResult(next_step="mvp_voting", next_index=0)
 
     player = all_players[index]
-    message = execute_postgame_discussion(ctx, player)
+    message = None
+
+    # Check if this is a human player
+    if player.is_human:
+        logging.info(f"Human player {player.name} - waiting for postgame input")
+
+        if ctx.emit_status:
+            ctx.emit_status("waiting_message", waiting_player=player.name, is_interrupt=False, is_respond=False)
+
+        ctx.game_state.set_waiting_for_human("discussion", {"label": "Share your postgame thoughts"})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        logging.info(f"Human postgame input received for {player.name}: {human_input}")
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "discussion":
+            message = human_input.get("message", "").strip()[:500]
+        else:
+            logging.warning(f"No valid human input for {player.name}, human_input={human_input}")
+    else:
+        message = execute_postgame_discussion(ctx, player)
 
     if message:
         ctx.add_event("discussion", message, "all", player=player.name)
@@ -144,9 +167,47 @@ def handle_postgame_discussion(ctx: StepContext) -> StepResult:
 
 @register_handler("mvp_voting")
 def handle_mvp_voting(ctx: StepContext) -> StepResult:
-    """All players vote for MVP (parallel)."""
+    """All players vote for MVP (parallel for AI, sequential for human)."""
     all_players = ctx.game_state.players
     all_names = [p.name for p in all_players]
+
+    results = []
+
+    # Check if there's a human player who needs to vote
+    human_player = ctx.game_state.get_human_player()
+    if human_player:
+        others = [p.name for p in all_players if p.name != human_player.name]
+
+        logging.info(f"Human player {human_player.name} - waiting for MVP vote")
+
+        if ctx.emit_status:
+            ctx.emit_status("waiting_message", waiting_player=human_player.name, is_interrupt=False, is_respond=False)
+
+        ctx.game_state.set_waiting_for_human("mvp_vote", {"options": others})
+        if ctx.emit_game_state:
+            ctx.emit_game_state()
+        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
+
+        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        logging.info(f"Human MVP vote received for {human_player.name}: {human_input}")
+        ctx.game_state.clear_waiting_for_human()
+
+        if human_input and human_input.get("type") == "mvp_vote":
+            target = human_input.get("target")
+            reason = human_input.get("reason", "Good game.")
+
+            # Validate: can't vote for self, must be valid player
+            if target == human_player.name or (target and target not in all_names):
+                target = random.choice(others) if others else None
+
+            if not target:
+                target = random.choice(others) if others else None
+
+            ctx.add_event("vote", f"I vote {target}. {reason}", "all", player=human_player.name)
+            results.append({"player": human_player.name, "target": target, "reason": reason})
+
+    # Now get AI player votes in parallel
+    ai_players = [p for p in all_players if not p.is_human]
 
     def mvp_vote_func(player):
         prompt = build_mvp_vote_prompt(ctx.game_state, player)
@@ -184,7 +245,8 @@ def handle_mvp_voting(ctx: StepContext) -> StepResult:
             ctx.add_event("vote", f"I vote {target}. Good game.", "all", player=player.name)
             return {"player": player.name, "target": target, "reason": "Good game."}
 
-    results = execute_parallel(all_players, mvp_vote_func, ctx)
+    ai_results = execute_parallel(ai_players, mvp_vote_func, ctx)
+    results.extend(ai_results)
     ctx.phase_data["mvp_votes"] = results
 
     resolve_mvp_voting(ctx.game_state)

@@ -701,6 +701,7 @@ def handle_night_resolve(ctx: StepContext) -> StepResult:
     winner = check_win_conditions(ctx.game_state)
     if winner:
         ctx.game_state.winner = winner
+        ctx.game_state.start_postgame_phase()
         return StepResult(next_step="postgame_reveal", next_index=0)
 
     # Transition to day

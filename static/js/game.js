@@ -145,9 +145,12 @@ function updateDisplay(gameState) {
         waitingForHuman,
         humanInputType,
         humanInputContext,
-        gameOver: gameState.game_over
+        gameOver: gameState.game_over,
+        phase: gameState.phase
     });
-    if (humanPlayerName && humanAlive && !gameState.game_over) {
+    // Show controls if: human exists AND (alive OR in postgame) AND game not fully over
+    const isPostgame = gameState.phase === 'postgame';
+    if (humanPlayerName && (humanAlive || isPostgame) && !gameState.game_over) {
         humanControls.style.display = 'block';
         updateHumanInputUI(gameState);
     } else {
@@ -238,11 +241,18 @@ function updatePlayers(players) {
         const hasContext = player.has_context;
         const hasScratchpad = player.has_scratchpad;
 
+        // When role is hidden, also hide context/scratchpad availability (except for own card)
+        // This prevents info leaks about special roles based on scratchpad presence
+        const isOwnCard = player.name === humanPlayerName;
+        const canShowContextInfo = !isRoleHidden || isOwnCard;
+        const showContextEnabled = canShowContextInfo && hasContext;
+        const showScratchpadEnabled = canShowContextInfo && hasScratchpad;
+
         // Build indicator HTML
         const indicatorHtml = shouldShowWaiting ? '<span class="waiting-indicator">...</span>' : '';
 
         // Add "(You)" indicator for human player
-        const youIndicator = player.name === humanPlayerName ? '<span class="you-indicator">(You)</span>' : '';
+        const youIndicator = isOwnCard ? '<span class="you-indicator">(You)</span>' : '';
 
         card.className = className;
         card.innerHTML = `
@@ -253,14 +263,14 @@ function updatePlayers(players) {
             <span class="player-model">${escapeHtml(player.model)}</span>
             <button class="btn-context"
                     onclick="showPlayerContext('${escapeHtml(player.name).replace(/'/g, "\\'")}')"
-                    ${hasContext ? '' : 'disabled'}
-                    title="${hasContext ? 'View LLM context' : 'No context available yet'}">
+                    ${showContextEnabled ? '' : 'disabled'}
+                    title="${showContextEnabled ? 'View LLM context' : 'No context available yet'}">
                 Context
             </button>
             <button class="btn-scratchpad"
                     onclick="showPlayerScratchpad('${escapeHtml(player.name).replace(/'/g, "\\'")}')"
-                    ${hasScratchpad ? '' : 'disabled'}
-                    title="${hasScratchpad ? 'View scratchpad' : 'No scratchpad notes yet'}">
+                    ${showScratchpadEnabled ? '' : 'disabled'}
+                    title="${showScratchpadEnabled ? 'View scratchpad' : 'No scratchpad notes yet'}">
                 Scratchpad
             </button>
         `;
@@ -680,17 +690,21 @@ function updateHumanInputUI(gameState) {
     const discussionInput = document.getElementById('discussion-input');
     const voteInput = document.getElementById('vote-input');
     const roleInput = document.getElementById('role-input');
+    const mvpVoteInput = document.getElementById('mvp-vote-input');
     const interruptStatus = document.getElementById('interrupt-status');
 
-    console.log('updateHumanInputUI called:', { waitingForHuman, humanInputType, humanAlive, isGameOver });
+    const isPostgame = gameState.phase === 'postgame';
+    console.log('updateHumanInputUI called:', { waitingForHuman, humanInputType, humanAlive, isGameOver, isPostgame });
 
     // Hide all by default
     interruptControl.style.display = 'none';
     discussionInput.style.display = 'none';
     voteInput.style.display = 'none';
     roleInput.style.display = 'none';
+    if (mvpVoteInput) mvpVoteInput.style.display = 'none';
 
-    if (!humanAlive || isGameOver) return;
+    // Allow input if alive OR in postgame (dead players participate in postgame)
+    if ((!humanAlive && !isPostgame) || isGameOver) return;
 
     // Check if waiting for human input
     if (waitingForHuman) {
@@ -710,6 +724,11 @@ function updateHumanInputUI(gameState) {
             roleInput.style.display = 'block';
             document.getElementById('role-action-label').textContent = humanInputContext.label || 'Choose Target';
             populateRoleOptions(humanInputContext.options || [], humanInputContext.label);
+        } else if (humanInputType === 'mvp_vote') {
+            if (mvpVoteInput) {
+                mvpVoteInput.style.display = 'block';
+                populateMvpVoteOptions(humanInputContext.options || []);
+            }
         }
     } else {
         // Show interrupt button during day discussion when human is not speaking
@@ -759,6 +778,18 @@ function populateRoleOptions(options, label) {
             return; // Skip self for mafia/vigilante
         }
         select.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+    });
+}
+
+function populateMvpVoteOptions(options) {
+    const select = document.getElementById('mvp-target');
+    if (!select) return;
+    select.innerHTML = '';
+    options.forEach(name => {
+        // Can't vote for yourself (already filtered by backend, but double-check)
+        if (name !== humanPlayerName) {
+            select.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+        }
     });
 }
 
@@ -834,6 +865,21 @@ function handleSubmitAction() {
     });
 
     document.getElementById('role-input').style.display = 'none';
+}
+
+function handleMvpVote() {
+    if (!socket || !currentGameId) return;
+    const target = document.getElementById('mvp-target').value;
+    const reason = document.getElementById('mvp-reason').value.trim() || 'Good game.';
+
+    socket.emit('human_mvp_vote', {
+        game_id: currentGameId,
+        target: target,
+        reason: reason
+    });
+
+    document.getElementById('mvp-reason').value = '';
+    document.getElementById('mvp-vote-input').style.display = 'none';
 }
 
 function formatTimestamp(isoString) {

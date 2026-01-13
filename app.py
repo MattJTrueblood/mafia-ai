@@ -374,6 +374,26 @@ def handle_human_role_action(data):
         logging.warning(f"game_id {game_id} not found in game_human_input")
 
 
+@socketio.on('human_mvp_vote')
+def handle_human_mvp_vote(data):
+    """Handle human player's MVP vote in postgame."""
+    game_id = data.get('game_id')
+    target = data.get('target')
+    reason = data.get('reason', 'Good game.')
+
+    logging.info(f"handle_human_mvp_vote: game_id={game_id}, target={target}, reason={reason}")
+
+    if game_id in game_human_input:
+        game_human_input[game_id]["input"] = {
+            "type": "mvp_vote",
+            "target": target,
+            "reason": reason
+        }
+        logging.info(f"Set human MVP vote for game {game_id}")
+    else:
+        logging.warning(f"game_id {game_id} not found in game_human_input")
+
+
 @socketio.on('human_interrupt')
 def handle_human_interrupt(data):
     """Handle human player's interrupt request during day discussion."""
