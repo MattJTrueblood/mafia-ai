@@ -331,6 +331,7 @@ def handle_introduction_message(ctx: StepContext) -> StepResult:
             ctx.emit_status("turn_polling", waiting_player=None)
         # Check if this day has voting
         if is_no_lynch_day(ctx.rules, ctx.day_number):
+            ctx.game_state.start_night_phase()
             return StepResult(next_step="night_start", next_index=0)
         return StepResult(next_step="scratchpad_pre_vote", next_index=0)
 
