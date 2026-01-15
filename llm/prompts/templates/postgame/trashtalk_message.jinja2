@@ -4,7 +4,7 @@
 
 {{ private_info }}
 
-The game is over. {{ winner }} wins!
+The game is over. {{ winner }} won!
 
 ROLE REVEAL:
 {% for p in all_players %}
@@ -13,18 +13,24 @@ ROLE REVEAL:
 
 === START PHASE INSTRUCTIONS ===
 
-POSTGAME TRASHTALK:
+{% if is_interrupt %}
+INTERRUPT MODE:
+You indicated you have urgent information that cannot wait.
+Be direct and concise.
+{% elif is_respond %}
+RESPOND MODE:
+You were mentioned and are responding.
+Add something new - never use this to repeat a point you've already heard.
+{% endif %}
 
-The game is over. All roles are revealed.
+POSTGAME DISCUSSION:
+It's your turn to speak during the postgame discussion phase.  
+Everything you say here is public;  all players will be able to see what you say.
+Focus on trash talk rather since the game is now over.
+Do not repeat yourself or others.
 
-This is the post-game trash talk phase.  The tone should be casual, petty, and conversational.
-You are speaking from your current mood after seeing the outcome and the conversation so far.
-
-Say whatever you feel like saying right now.
-Gloat, cope, deflect, justify yourself, blame someone, or double down.
-This is your chance to say anything you were holding back from saying during the game.
-
-1–2 sentences max, plain text only.
+Output format: plain text (no JSON)
+Keep it brief: 1-2 sentences maximum.
 
 === END PHASE INSTRUCTIONS ===
 
