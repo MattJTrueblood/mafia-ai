@@ -36,6 +36,8 @@ function initializeGame(gameId) {
     document.getElementById('pass-turn').addEventListener('click', handlePassTurn);
     document.getElementById('cast-vote').addEventListener('click', handleCastVote);
     document.getElementById('submit-action').addEventListener('click', handleSubmitAction);
+    document.getElementById('trashtalk-interrupt-btn').addEventListener('click', handleInterrupt);
+    document.getElementById('end-trashtalk-btn').addEventListener('click', handleEndTrashtalk);
     
     // Connect to WebSocket
     socket = io();
@@ -687,17 +689,20 @@ function closeScratchpadModal() {
 // Human Input UI Functions
 function updateHumanInputUI(gameState) {
     const interruptControl = document.getElementById('interrupt-control');
+    const trashtalkControl = document.getElementById('trashtalk-control');
     const discussionInput = document.getElementById('discussion-input');
     const voteInput = document.getElementById('vote-input');
     const roleInput = document.getElementById('role-input');
     const mvpVoteInput = document.getElementById('mvp-vote-input');
     const interruptStatus = document.getElementById('interrupt-status');
+    const trashtalkStatus = document.getElementById('trashtalk-status');
 
     const isPostgame = gameState.phase === 'postgame';
-    console.log('updateHumanInputUI called:', { waitingForHuman, humanInputType, humanAlive, isGameOver, isPostgame });
+    console.log('updateHumanInputUI called:', { waitingForHuman, humanInputType, humanAlive, isGameOver, isPostgame, currentStep });
 
     // Hide all by default
     interruptControl.style.display = 'none';
+    trashtalkControl.style.display = 'none';
     discussionInput.style.display = 'none';
     voteInput.style.display = 'none';
     roleInput.style.display = 'none';
@@ -705,6 +710,10 @@ function updateHumanInputUI(gameState) {
 
     // Allow input if alive OR in postgame (dead players participate in postgame)
     if ((!humanAlive && !isPostgame) || isGameOver) return;
+
+    // Check if this is trashtalk phase (for showing end button)
+    const isTrashtalk = isPostgame &&
+        (currentStep === 'trashtalk_poll' || currentStep === 'trashtalk_message');
 
     // Check if waiting for human input
     if (waitingForHuman) {
@@ -717,6 +726,11 @@ function updateHumanInputUI(gameState) {
                 header.textContent = humanInputContext.label || 'Your Turn to Speak';
             }
             document.getElementById('message-text').focus();
+            // During trashtalk, also show the end button
+            if (isTrashtalk) {
+                trashtalkControl.style.display = 'block';
+                document.getElementById('trashtalk-interrupt-btn').style.display = 'none';
+            }
         } else if (humanInputType === 'vote') {
             voteInput.style.display = 'block';
             populateVoteOptions(humanInputContext.options || []);
@@ -744,6 +758,19 @@ function updateHumanInputUI(gameState) {
             } else {
                 interruptStatus.textContent = '';
                 document.getElementById('interrupt-btn').disabled = false;
+            }
+        }
+
+        // Show trashtalk controls during postgame trashtalk phase
+        if (isTrashtalk) {
+            trashtalkControl.style.display = 'block';
+            document.getElementById('trashtalk-interrupt-btn').style.display = 'inline-block';
+            if (humanInterruptRequested) {
+                trashtalkStatus.textContent = 'Waiting for your turn...';
+                document.getElementById('trashtalk-interrupt-btn').disabled = true;
+            } else {
+                trashtalkStatus.textContent = '';
+                document.getElementById('trashtalk-interrupt-btn').disabled = false;
             }
         }
     }
@@ -802,8 +829,18 @@ function handleToggleReveal() {
 function handleInterrupt() {
     if (!socket || !currentGameId) return;
     socket.emit('human_interrupt', { game_id: currentGameId });
+    // Disable both interrupt buttons (day and trashtalk)
     document.getElementById('interrupt-btn').disabled = true;
     document.getElementById('interrupt-status').textContent = 'Requesting turn...';
+    document.getElementById('trashtalk-interrupt-btn').disabled = true;
+    document.getElementById('trashtalk-status').textContent = 'Requesting turn...';
+}
+
+function handleEndTrashtalk() {
+    if (!socket || !currentGameId) return;
+    socket.emit('end_trashtalk', { game_id: currentGameId });
+    document.getElementById('end-trashtalk-btn').disabled = true;
+    document.getElementById('trashtalk-status').textContent = 'Ending trashtalk...';
 }
 
 function handleSendMessage() {

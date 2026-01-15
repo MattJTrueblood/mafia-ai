@@ -417,3 +417,75 @@ def build_scratchpad_prompt(game_state, player, timing: str) -> str:
         timing_description=timing_context[timing]["description"]
     )
     return get_template_manager().render('scratchpad.jinja2', context)
+
+
+def build_trashtalk_poll_prompt(game_state, player) -> str:
+    """Build prompt for trashtalk polling (who wants to speak).
+
+    Args:
+        game_state: Current game state
+        player: The player being polled
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    # Prepare player list with roles (all revealed in postgame)
+    all_players = []
+    for p in game_state.players:
+        role_text = "mafia" if p.team == "mafia" else p.role.name.lower()
+        status = "alive" if p.alive else "dead"
+        all_players.append({
+            'name': p.name,
+            'role_text': role_text,
+            'status': status
+        })
+
+    winner = "Town" if game_state.winner == "town" else "Mafia" if game_state.winner == "mafia" else game_state.winner
+
+    context = builder.build_context(
+        player=player,
+        phase='trashtalk_poll',
+        all_players=all_players,
+        winner=winner
+    )
+    return get_template_manager().render('postgame/trashtalk_poll.jinja2', context)
+
+
+def build_trashtalk_message_prompt(game_state, player, is_interrupt: bool = False, is_respond: bool = False) -> str:
+    """Build prompt for trashtalk message generation.
+
+    Args:
+        game_state: Current game state
+        player: The player speaking
+        is_interrupt: Whether this is an interrupt
+        is_respond: Whether this is a response to the last speaker
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    # Prepare player list with roles (all revealed in postgame)
+    all_players = []
+    for p in game_state.players:
+        role_text = "mafia" if p.team == "mafia" else p.role.name.lower()
+        status = "alive" if p.alive else "dead"
+        all_players.append({
+            'name': p.name,
+            'role_text': role_text,
+            'status': status
+        })
+
+    winner = "Town" if game_state.winner == "town" else "Mafia" if game_state.winner == "mafia" else game_state.winner
+
+    context = builder.build_context(
+        player=player,
+        phase='trashtalk_message',
+        all_players=all_players,
+        winner=winner,
+        is_interrupt=is_interrupt,
+        is_respond=is_respond
+    )
+    return get_template_manager().render('postgame/trashtalk_message.jinja2', context)

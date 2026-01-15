@@ -1,0 +1,35 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+The game is over. {{ winner }} wins!
+
+ROLE REVEAL:
+{% for p in all_players %}
+- {{ p.name }}: {{ p.role_text }} ({{ p.status }})
+{% endfor %}
+
+=== START PHASE INSTRUCTIONS ===
+
+POSTGAME TRASHTALK:
+
+The game is over. All roles are revealed.
+
+This is the post-game trash talk phase.  The tone should be casual, petty, and conversational.
+You are speaking from your current mood after seeing the outcome and the conversation so far.
+
+Say whatever you feel like saying right now.
+Gloat, cope, deflect, justify yourself, blame someone, or double down.
+This is your chance to say anything you were holding back from saying during the game.
+
+1–2 sentences max, plain text only.
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

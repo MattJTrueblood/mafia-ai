@@ -99,6 +99,7 @@ class GameState:
         self.human_input_type = None  # "discussion", "vote", "mafia_vote", "role_action", etc.
         self.human_input_context = {}  # Options/metadata for current input request
         self.human_interrupt_requested = False  # True when human wants to speak in day discussion
+        self.end_trashtalk_requested = False  # True when human wants to end postgame trashtalk
 
         # Create player objects
         for player_data in players:

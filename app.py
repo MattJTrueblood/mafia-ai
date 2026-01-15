@@ -396,13 +396,24 @@ def handle_human_mvp_vote(data):
 
 @socketio.on('human_interrupt')
 def handle_human_interrupt(data):
-    """Handle human player's interrupt request during day discussion."""
+    """Handle human player's interrupt request during day discussion or trashtalk."""
     game_id = data.get('game_id')
 
     if game_id in games:
         game_state = games[game_id]
         game_state.human_interrupt_requested = True
         # Emit updated state so frontend knows interrupt was registered
+        emit_game_state_update(game_id, game_state)
+
+
+@socketio.on('end_trashtalk')
+def handle_end_trashtalk(data):
+    """Handle human player's request to end postgame trashtalk."""
+    game_id = data.get('game_id')
+
+    if game_id in games:
+        game_state = games[game_id]
+        game_state.end_trashtalk_requested = True
         emit_game_state_update(game_id, game_state)
 
 

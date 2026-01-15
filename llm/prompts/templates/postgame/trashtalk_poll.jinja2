@@ -1,0 +1,22 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+The game is over. {{ winner }} wins!
+
+ROLE REVEAL:
+{% for p in all_players %}
+- {{ p.name }}: {{ p.role_text }} ({{ p.status }})
+{% endfor %}
+
+=== START PHASE INSTRUCTIONS ===
+
+TRASHTALK POLLING:
+The postgame trashtalk is happening. Do you want to jump in?
+
+INTERRUPT: You have something spicy to say RIGHT NOW - a sick burn, a brag, calling someone out.
+RESPOND: Someone just said something about you or that you need to clap back at.
+PASS: Skip this round of trashtalk.
+WAIT: Take no action, wait for your normal turn (default).
