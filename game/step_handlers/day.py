@@ -614,18 +614,19 @@ def handle_scratchpad_pre_vote(ctx: StepContext) -> StepResult:
 
 @register_handler("voting")
 def handle_voting(ctx: StepContext) -> StepResult:
-    """All players vote on who to lynch. Human votes first, then AI in parallel."""
+    """All players vote on who to lynch. All votes are simultaneous (not visible to each other)."""
     alive_players = ctx.get_alive_players()
     alive_names = [p.name for p in alive_players]
 
     ctx.add_event("system", f"Day {ctx.day_number} voting phase begins.")
 
     results = []
+    pending_vote_events = []  # Collect vote events to add after all votes are in
 
     # Check if there's a human player who needs to vote
     human_player = ctx.game_state.get_human_player()
     if human_player and human_player.alive:
-        # Wait for human vote first
+        # Wait for human vote first (but don't reveal it to AI yet)
         ctx.game_state.set_waiting_for_human("vote", {"options": alive_names})
         if ctx.emit_game_state:
             ctx.emit_game_state()
@@ -648,9 +649,8 @@ def handle_voting(ctx: StepContext) -> StepResult:
             if explanation:
                 msg += f" {explanation}"
 
-            ctx.add_event("vote", msg, "all", player=human_player.name, priority=8,
-                         metadata={"target": vote_target})
-
+            # Defer adding vote event until after all votes are collected
+            pending_vote_events.append((msg, human_player.name, vote_target))
             results.append({"player": human_player.name, "vote": vote_target, "explanation": explanation})
 
     # Now get AI player votes in parallel
@@ -678,13 +678,20 @@ def handle_voting(ctx: StepContext) -> StepResult:
         if explanation:
             msg += f" {explanation}"
 
-        ctx.add_event("vote", msg, "all", player=player.name, priority=8,
-                     metadata={"target": vote_target})
-
-        return {"player": player.name, "vote": vote_target, "explanation": explanation}
+        return {"player": player.name, "vote": vote_target, "explanation": explanation, "msg": msg}
 
     ai_results = execute_parallel(ai_players, vote_func, ctx)
-    results.extend(ai_results)
+
+    # Now add all vote events at once (simultaneous reveal)
+    for msg, player_name, vote_target in pending_vote_events:
+        ctx.add_event("vote", msg, "all", player=player_name, priority=8,
+                     metadata={"target": vote_target})
+
+    for result in ai_results:
+        ctx.add_event("vote", result["msg"], "all", player=result["player"], priority=8,
+                     metadata={"target": result["vote"]})
+        results.append({"player": result["player"], "vote": result["vote"], "explanation": result["explanation"]})
+
     ctx.phase_data["votes"] = results
 
     return StepResult(next_step="voting_resolve", next_index=0)

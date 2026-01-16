@@ -173,33 +173,39 @@ def tally_mafia_votes(game_state: GameState):
 
 
 def resolve_night_actions(game_state: GameState):
-    """Resolve night actions and apply kills."""
+    """Resolve night actions and apply kills simultaneously."""
     protected_players = game_state.phase_data.get("protected_players", [])
-    kills = []
+
+    # Collect all kills BEFORE applying any (truly simultaneous resolution)
+    pending_kills = []
+    pending_names = set()
 
     # Mafia kill
     mafia_target = game_state.phase_data.get("mafia_kill_target")
     if mafia_target and mafia_target not in protected_players:
         target_player = game_state.get_player_by_name(mafia_target)
         if target_player and target_player.alive:
-            target_player.alive = False
-            game_state.add_event("death", f"{mafia_target} has been found dead, killed during the night!",
-                                "all", metadata={"player": mafia_target, "reason": "mafia_kill"})
-            kills.append(mafia_target)
+            pending_kills.append((mafia_target, "mafia_kill"))
+            pending_names.add(mafia_target)
 
     # Vigilante kills
     vigilante_kills = game_state.phase_data.get("vigilante_kills", [])
     for vig_data in vigilante_kills:
         vig_target = vig_data.get("target")
-        if vig_target and vig_target not in protected_players and vig_target not in kills:
+        if vig_target and vig_target not in protected_players and vig_target not in pending_names:
             target_player = game_state.get_player_by_name(vig_target)
             if target_player and target_player.alive:
-                target_player.alive = False
-                game_state.add_event("death", f"{vig_target} has been found dead, killed during the night!",
-                                    "all", metadata={"player": vig_target, "reason": "vigilante_kill"})
-                kills.append(vig_target)
+                pending_kills.append((vig_target, "vigilante_kill"))
+                pending_names.add(vig_target)
 
-    if not kills:
+    # Now apply all kills at once
+    for target_name, reason in pending_kills:
+        target_player = game_state.get_player_by_name(target_name)
+        target_player.alive = False
+        game_state.add_event("death", f"{target_name} has been found dead, killed during the night!",
+                            "all", metadata={"player": target_name, "reason": reason})
+
+    if not pending_kills:
         game_state.add_event("system", "Nobody was killed last night.", "all")
 
 
@@ -695,7 +701,7 @@ def handle_night_resolve(ctx: StepContext) -> StepResult:
     from ..win_conditions import check_win_conditions
 
     resolve_night_actions(ctx.game_state)
-    ctx.add_event("phase_change", f"Night {ctx.day_number + 1} ends.")
+    ctx.add_event("phase_change", f"Night {ctx.day_number} ends.")
 
     # Check win conditions
     winner = check_win_conditions(ctx.game_state)

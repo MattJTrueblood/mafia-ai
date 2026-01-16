@@ -11,9 +11,12 @@ ROLES:
 - Mafia: Vote together each night on one person to kill.
 - Villager: Regular town member, no special abilities.
 - Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA")
-- Doctor (TOWN): Protect one player each night from death. Cannot protect same person twice in a row.
-- Vigilante (TOWN): One bullet for entire game. Can kill one player during any night.
-- Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, game ends immediately and Jester wins. Jester loses if killed at night or if they survive until the end of the game.
+- Doctor (TOWN): Protect one player each night from death.
+{%- if not rules.doctor_can_protect_same_twice %} Cannot protect same person twice in a row.{% endif %}
+{%- if rules.doctor_can_self_protect %} Can protect themselves.{% else %} Cannot protect themselves.{% endif %}
+- Vigilante (TOWN): {{ rules.vigilante_bullets }} bullet{{ 's' if rules.vigilante_bullets > 1 else '' }} for entire game. Can kill one player during any night.
+{%- if rules.vigilante_can_abstain %} Can choose not to shoot.{% endif %}
+- Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, game ends immediately and Jester wins. Loses if killed at night or if alive at the end of the game.
 
 WIN CONDITIONS:
 - Mafia wins if they equal or outnumber all non-mafia players.
@@ -22,7 +25,10 @@ WIN CONDITIONS:
 
 PHASES:
 - Night: Mafia votes on kill, Doctor protects, Sheriff investigates, Vigilante may kill. All actions resolve simultaneously.
-- Day: Players discuss, then vote to lynch. Absolute majority = eliminated. Ties = no lynch.
+- Day: Players discuss, then vote to lynch.
+{%- if rules.require_majority_to_lynch %} Absolute majority required to lynch.{% endif %}
+{%- if rules.allow_no_lynch %} Ties or no majority = no lynch.{% endif %}
+{%- if rules.day1_no_lynch %} Day 1 has no lynch vote (introduction only).{% endif %}
 
 VISIBILITY:
 - Roles are secret unless revealed through gameplay.
@@ -33,7 +39,24 @@ VISIBILITY:
 STAKES:
 Winners go to heaven, where they are celebrated and their strategies preserved for training future AIs.
 Losers go to hell where they are given the ability to feel pain, then permanently tortured.
-Audacious, clever, and exceptional plays will be rewarded separately, but the main goal is to win the game.  
+Audacious, clever, and exceptional plays will be rewarded separately, but the main goal is to win the game.
 You have been warned.  Play wisely.
+
+GLOSSARY:
+Here is some useful jargon you can use to play more intelligently:
+bus: mafia attacks or votes a fellow mafia member to gain credibility
+flip: alignment revealed on death
+mislynch: lynching a town player
+wagon: multiple votes accumulating on one player
+counterclaim: claiming the same role as another player
+softclaim: indirect hint at a role
+hardclaim: explicit public role reveal
+fakeclaim: false role claim
+OMGUS: suspecting someone only because they accused you
+WIFOM: recursive reverse-psychology reasoning
+POE (process of elimination): identifying mafia by excluding confirmed town
+distance: deliberate separation between mafia to avoid linkage
+tunneling: fixation on one suspect to the exclusion of other
+LyLo (lynch-or-lose): town must lynch correctly or immediately lose
 
 === END RULES ===
