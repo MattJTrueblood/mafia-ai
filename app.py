@@ -51,6 +51,7 @@ class GameControl:
     def __init__(self):
         self.pause_event = Event()  # Set when game is paused
         self.cancel_event = Event()  # Set to cancel current LLM call
+        self.interrupt_event = Event()  # Set when human wants to interrupt (cancels but doesn't pause)
         self.loop_greenlet = None  # The running game loop greenlet
         self.is_running = False  # Whether the loop is active
 
@@ -223,11 +224,31 @@ def game_loop(game_id: str):
                 gevent.sleep(0)
 
             except LLMCancelledException:
-                # LLM call was cancelled - treat as pause
-                control.pause_event.set()
-                emit_game_state_update(game_id, game_state)
-                socketio.emit('pause_state', {'paused': True}, room=game_id)
-                continue
+                # Check if this was a human interrupt (not a pause)
+                if control.interrupt_event.is_set():
+                    # Human interrupt - don't pause, give human the floor
+                    logging.info(f"[INTERRUPT] LLM cancelled due to human interrupt")
+                    control.interrupt_event.clear()
+                    control.cancel_event.clear()
+
+                    # Ensure human_interrupt_requested is set (should already be)
+                    game_state.human_interrupt_requested = True
+
+                    # Force step back to poll so it will see the interrupt
+                    if game_state.phase == "day":
+                        game_state.current_step = "discussion_poll"
+                    elif game_state.phase == "postgame":
+                        game_state.current_step = "trashtalk_poll"
+
+                    emit_game_state_update(game_id, game_state)
+                    # Continue the loop - next iteration will run the poll which sees the interrupt
+                    continue
+                else:
+                    # Regular pause - LLM call was cancelled
+                    control.pause_event.set()
+                    emit_game_state_update(game_id, game_state)
+                    socketio.emit('pause_state', {'paused': True}, room=game_id)
+                    continue
             except Exception as e:
                 logging.exception(f"Error in game loop - game_over={game_state.game_over}, step_index={game_state.step_index}")
                 game_state.add_event("system", f"Error: {str(e)}", "all")
@@ -396,14 +417,38 @@ def handle_human_mvp_vote(data):
 
 @socketio.on('human_interrupt')
 def handle_human_interrupt(data):
-    """Handle human player's interrupt request during day discussion or trashtalk."""
+    """Handle human player's interrupt request during day discussion or trashtalk.
+
+    This immediately cancels any in-flight AI operations and gives the human the floor.
+    """
     game_id = data.get('game_id')
 
-    if game_id in games:
-        game_state = games[game_id]
-        game_state.human_interrupt_requested = True
-        # Emit updated state so frontend knows interrupt was registered
-        emit_game_state_update(game_id, game_state)
+    if game_id not in games:
+        return
+
+    game_state = games[game_id]
+
+    # Only allow interrupt during discussion-like phases
+    is_day_discussion = (game_state.phase == "day" and
+                         game_state.current_step in ("discussion_poll", "discussion_message"))
+    is_trashtalk = (game_state.phase == "postgame" and
+                    game_state.current_step in ("trashtalk_poll", "trashtalk_message"))
+
+    if not (is_day_discussion or is_trashtalk):
+        logging.info(f"[INTERRUPT] Ignored - not in discussion phase (phase={game_state.phase}, step={game_state.current_step})")
+        return
+
+    game_state.human_interrupt_requested = True
+
+    # Cancel any in-flight AI operations
+    if game_id in game_controls:
+        control = game_controls[game_id]
+        control.interrupt_event.set()
+        control.cancel_event.set()
+        logging.info(f"[INTERRUPT] Human interrupt triggered - cancelling AI operations")
+
+    # Emit updated state so frontend knows interrupt was registered
+    emit_game_state_update(game_id, game_state)
 
 
 @socketio.on('end_trashtalk')
