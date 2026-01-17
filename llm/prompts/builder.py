@@ -37,7 +37,12 @@ class ContextBuilder:
 
     def _get_game_rules(self):
         """Render game rules from template."""
-        return self.template_manager.render('partials/rules.jinja2', {'rules': DEFAULT_RULES})
+        # Get unique role names in this game
+        roles_in_game = set(p.role.name for p in self.game_state.players if p.role)
+        return self.template_manager.render('partials/rules.jinja2', {
+            'rules': DEFAULT_RULES,
+            'roles_in_game': roles_in_game
+        })
 
     def _get_game_log(self, player):
         """Get game log filtered by player visibility."""

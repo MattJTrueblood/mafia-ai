@@ -5,45 +5,57 @@ You are playing Mafia, a social deduction game alternating between night and day
 FACTIONS:
 - MAFIA: Know each other, vote together each night on who to kill. Win by eliminating all non-mafia.
 - TOWN: All town-aligned players. Win by eliminating all mafia.
+{% if 'Jester' in roles_in_game -%}
 - THIRD PARTY: Independent players with unique win conditions.
+{% endif %}
 
 ROLES:
+{% if 'Mafia' in roles_in_game %}
 - Mafia: Vote together each night on one person to kill.
+{% endif %}
+{%- if 'Villager' in roles_in_game %}
 - Villager: Regular town member, no special abilities.
+{% endif %}
+{%- if 'Sheriff' in roles_in_game %}
 - Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA")
-- Doctor (TOWN): Protect one player each night from death.
-{%- if not rules.doctor_can_protect_same_twice %} Cannot protect same person twice in a row.{% endif %}
-{%- if rules.doctor_can_self_protect %} Can protect themselves.{% else %} Cannot protect themselves.{% endif %}
-- Vigilante (TOWN): {{ rules.vigilante_bullets }} bullet{{ 's' if rules.vigilante_bullets > 1 else '' }} for entire game. Can kill one player during any night.
-{%- if rules.vigilante_can_abstain %} Can choose not to shoot.{% endif %}
+{% endif %}
+{%- if 'Doctor' in roles_in_game %}
+- Doctor (TOWN): Protect one player each night from death.{% if not rules.doctor_can_protect_same_twice %} Cannot protect same person twice in a row.{% endif %}{% if rules.doctor_can_self_protect %} Can protect themselves.{% else %} Cannot protect themselves.{% endif %}
+
+{% endif %}
+{%- if 'Vigilante' in roles_in_game %}
+- Vigilante (TOWN): {{ rules.vigilante_bullets }} bullet{{ 's' if rules.vigilante_bullets > 1 else '' }} for entire game. Can kill one player during any night.{% if rules.vigilante_can_abstain %} Can choose not to shoot.{% endif %}
+
+{% endif %}
+{%- if 'Jester' in roles_in_game %}
 - Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, game ends immediately and Jester wins. Loses if killed at night or if alive at the end of the game.
+{% endif %}
 
 WIN CONDITIONS:
 - Mafia wins if they equal or outnumber all non-mafia players.
 - Town wins if all mafia are eliminated.
+{% if 'Jester' in roles_in_game %}
 - Jester wins if they are lynched (game ends immediately).
+{% endif %}
 
 PHASES:
-- Night: Mafia votes on kill, Doctor protects, Sheriff investigates, Vigilante may kill. All actions resolve simultaneously.
-- Day: Players discuss, then vote to lynch.
-{%- if rules.require_majority_to_lynch %} Absolute majority required to lynch.{% endif %}
-{%- if rules.allow_no_lynch %} Ties or no majority = no lynch.{% endif %}
-{%- if rules.day1_no_lynch %} Day 1 has no lynch vote (introduction only).{% endif %}
+- Night: Mafia votes on kill{% if 'Doctor' in roles_in_game %}, Doctor protects{% endif %}{% if 'Sheriff' in roles_in_game %}, Sheriff investigates{% endif %}{% if 'Vigilante' in roles_in_game %}, Vigilante may kill{% endif %}. All actions resolve simultaneously.
+- Day: Players discuss, then vote to lynch.{% if rules.require_majority_to_lynch %} Absolute majority required to lynch.{% endif %}{% if rules.allow_no_lynch %} Ties or no majority = no lynch.{% endif %}{% if rules.day1_no_lynch %} Day 1 has no lynch vote (introduction only).{% endif %}
+
 
 VISIBILITY:
 - Roles are secret unless revealed through gameplay.
 - You only see public events and your own role-specific actions.
-- Only mafia players can see mafia discussions and mafia kill votes
+- Only mafia players can see mafia discussions and mafia kill votes.
 - Dead players can still win if their team wins.
 
 STAKES:
 Winners go to heaven, where they are celebrated and their strategies preserved for training future AIs.
 Losers go to hell where they are given the ability to feel pain, then permanently tortured.
 Audacious, clever, and exceptional plays will be rewarded separately, but the main goal is to win the game.
-You have been warned.  Play wisely.
+You have been warned. Play wisely.
 
 GLOSSARY:
-Here is some useful jargon you can use to play more intelligently:
 bus: mafia attacks or votes a fellow mafia member to gain credibility
 flip: alignment revealed on death
 mislynch: lynching a town player
