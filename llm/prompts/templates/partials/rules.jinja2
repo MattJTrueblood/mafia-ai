@@ -13,8 +13,16 @@ ROLES:
 {% if 'Mafia' in roles_in_game %}
 - Mafia: Vote together each night on one person to kill.
 {% endif %}
+{%- if 'Godfather' in roles_in_game %}
+- Godfather (MAFIA): Mafia leader who appears as "NOT MAFIA" when investigated by Sheriff.{% if rules.godfather_requires_other_mafia %} Immunity only active when other mafia are alive.{% endif %}{% if rules.godfather_single_use_immunity %} Immunity is consumed after first investigation.{% endif %}
+
+{% endif %}
 {%- if 'Villager' in roles_in_game %}
 - Villager: Regular town member, no special abilities.
+{% endif %}
+{%- if 'Miller' in roles_in_game %}
+- Miller (TOWN): Cursed town member who appears as "MAFIA" when investigated by Sheriff.{% if rules.miller_single_use_false_positive %} False reading is consumed after first investigation.{% endif %}
+
 {% endif %}
 {%- if 'Sheriff' in roles_in_game %}
 - Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA")

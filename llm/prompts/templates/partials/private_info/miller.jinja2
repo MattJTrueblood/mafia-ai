@@ -1,0 +1,13 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, MILLER (TOWN faction).
+
+CURSE: If investigated by the Sheriff, you appear as "MAFIA" despite being town-aligned.
+This makes you vulnerable to mislynches. Consider carefully how and when to claim your role.
+{% if false_positive_used -%}
+NOTE: Your false reading has been consumed. Future investigations will reveal your true alignment.
+{% endif %}
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

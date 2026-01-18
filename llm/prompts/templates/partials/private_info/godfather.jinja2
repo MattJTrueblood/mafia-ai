@@ -1,0 +1,15 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, GODFATHER (MAFIA faction leader).
+Fellow mafia members: {{ mafia_names | join(', ') }}
+
+SPECIAL ABILITY: If investigated by the Sheriff, you appear as "NOT MAFIA".
+{% if immunity_status == "used" -%}
+WARNING: Your investigation immunity has been consumed. Future investigations will reveal your true alignment.
+{% elif immunity_status == "conditional" -%}
+NOTE: Your immunity only works while other mafia members are alive.
+{% endif %}
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

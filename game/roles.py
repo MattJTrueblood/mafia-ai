@@ -21,10 +21,19 @@ class Role:
 
 class Mafia(Role):
     """Mafia role - wins with mafia, loses with town."""
-    
+
     def __init__(self):
         super().__init__("Mafia")
         self.team = "mafia"
+
+
+class Godfather(Role):
+    """Godfather role - mafia leader who appears innocent to sheriff."""
+
+    def __init__(self):
+        super().__init__("Godfather")
+        self.team = "mafia"
+        self.investigation_immunity_used = False  # Track if immunity has been consumed
 
 
 class Villager(Role):
@@ -33,6 +42,15 @@ class Villager(Role):
     def __init__(self):
         super().__init__("Villager")
         self.team = "town"
+
+
+class Miller(Role):
+    """Miller role - town member who appears guilty to sheriff."""
+
+    def __init__(self):
+        super().__init__("Miller")
+        self.team = "town"
+        self.false_positive_used = False  # Track if false positive has been consumed
 
 
 class Sheriff(Role):
@@ -82,7 +100,9 @@ class Jester(Role):
 # Role registry
 ROLE_CLASSES = {
     "Mafia": Mafia,
+    "Godfather": Godfather,
     "Villager": Villager,
+    "Miller": Miller,
     "Sheriff": Sheriff,
     "Doctor": Doctor,
     "Vigilante": Vigilante,

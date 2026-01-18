@@ -41,6 +41,13 @@ class GameRules:
     require_majority_to_lynch: bool = True  # Need >50% to lynch
     allow_no_lynch: bool = True             # If no majority, nobody dies
 
+    # Godfather rules
+    godfather_requires_other_mafia: bool = False  # Only immune when other mafia alive
+    godfather_single_use_immunity: bool = False   # Loses immunity after first investigation
+
+    # Miller rules
+    miller_single_use_false_positive: bool = False  # Second investigation reveals true alignment
+
 
 # =============================================================================
 # RULE HELPER FUNCTIONS
@@ -95,6 +102,62 @@ def get_night_steps_for_role(role_name: str) -> List[str]:
     """
     role_lower = role_name.lower()
     return [f"{role_lower}_discuss", f"{role_lower}_act"]
+
+
+def get_investigation_result(rules: GameRules, target_player, game_state) -> tuple[str, bool]:
+    """
+    Determine sheriff investigation result for a target.
+
+    Handles special cases for Godfather (appears innocent) and Miller (appears guilty).
+
+    Args:
+        rules: GameRules instance
+        target_player: The player being investigated
+        game_state: Current game state (for checking other mafia alive)
+
+    Returns:
+        (result, immunity_consumed) where:
+        - result is "mafia" or "not mafia"
+        - immunity_consumed is True if a Godfather/Miller special ability was triggered
+    """
+    role_name = target_player.role.name if target_player.role else None
+    true_result = "mafia" if target_player.team == "mafia" else "not mafia"
+
+    # Handle Godfather - appears innocent
+    if role_name == "Godfather":
+        immunity_available = True
+
+        # Rule: requires other mafia alive
+        if rules.godfather_requires_other_mafia:
+            other_mafia = [p for p in game_state.get_alive_players()
+                          if p.team == "mafia" and p.name != target_player.name]
+            if not other_mafia:
+                immunity_available = False
+
+        # Rule: single-use immunity
+        if rules.godfather_single_use_immunity and target_player.role.investigation_immunity_used:
+            immunity_available = False
+
+        if immunity_available:
+            return "not mafia", True  # Appears innocent, immunity was used
+        else:
+            return "mafia", False  # Reveals true alignment
+
+    # Handle Miller - appears guilty
+    if role_name == "Miller":
+        false_positive_available = True
+
+        # Rule: single-use false positive
+        if rules.miller_single_use_false_positive and target_player.role.false_positive_used:
+            false_positive_available = False
+
+        if false_positive_available:
+            return "mafia", True  # Appears guilty, false positive was triggered
+        else:
+            return "not mafia", False  # Reveals true alignment
+
+    # Normal investigation - check team
+    return true_result, False
 
 
 # =============================================================================

@@ -209,7 +209,7 @@ def game_loop(game_id: str):
                 run_step(
                     game_state=game_state,
                     llm_client=llm_client,
-                    rules=DEFAULT_RULES,
+                    rules=game_state.rules,  # Use game-specific rules
                     emit_status=status_callback,
                     emit_player_status=player_status_callback,
                     emit_game_state=game_state_callback,
@@ -272,11 +272,14 @@ def index():
 @app.route("/start_game", methods=["POST"])
 def start_game():
     """Initialize a new game with players."""
+    from game.rules import GameRules
+
     data = request.json
     players = data.get("players", [])
     role_distribution = data.get("role_distribution")
     human_player_name = data.get("human_player_name")  # Optional
     forced_role = data.get("forced_role")  # Optional
+    game_rules_data = data.get("game_rules", {})  # Optional custom rules
 
     # Normalize empty string to None
     if human_player_name == "":
@@ -289,11 +292,21 @@ def start_game():
     if len(players) < 3:
         return jsonify({"error": "Need at least 3 players"}), 400
 
+    # Create custom GameRules if provided
+    custom_rules = None
+    if game_rules_data:
+        try:
+            custom_rules = GameRules(**game_rules_data)
+            logging.info(f"Using custom rules: {game_rules_data}")
+        except TypeError as e:
+            logging.warning(f"Invalid rules data, using defaults: {e}")
+
     game_state = GameState(
         players,
         role_distribution=role_distribution,
         human_player_name=human_player_name,
-        forced_role=forced_role
+        forced_role=forced_role,
+        rules=custom_rules
     )
     games[game_state.game_id] = game_state
 

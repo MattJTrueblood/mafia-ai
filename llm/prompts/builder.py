@@ -39,8 +39,10 @@ class ContextBuilder:
         """Render game rules from template."""
         # Get unique role names in this game
         roles_in_game = set(p.role.name for p in self.game_state.players if p.role)
+        # Use game-specific rules if available, otherwise fall back to defaults
+        rules = getattr(self.game_state, 'rules', None) or DEFAULT_RULES
         return self.template_manager.render('partials/rules.jinja2', {
-            'rules': DEFAULT_RULES,
+            'rules': rules,
             'roles_in_game': roles_in_game
         })
 
@@ -91,7 +93,25 @@ class ContextBuilder:
 
         if role_name == "Mafia":
             mafia_players = self.game_state.get_players_by_role("Mafia")
-            context['mafia_names'] = [p.name for p in mafia_players]
+            godfather_players = self.game_state.get_players_by_role("Godfather")
+            context['mafia_names'] = [p.name for p in mafia_players + godfather_players]
+
+        elif role_name == "Godfather":
+            mafia_players = self.game_state.get_players_by_role("Mafia")
+            godfather_players = self.game_state.get_players_by_role("Godfather")
+            context['mafia_names'] = [p.name for p in mafia_players + godfather_players]
+            context['investigation_immunity_used'] = getattr(role, 'investigation_immunity_used', False)
+            # Determine immunity status for display
+            rules = getattr(self.game_state, 'rules', None) or DEFAULT_RULES
+            if context['investigation_immunity_used']:
+                context['immunity_status'] = "used"
+            elif rules.godfather_requires_other_mafia:
+                context['immunity_status'] = "conditional"
+            else:
+                context['immunity_status'] = "active"
+
+        elif role_name == "Miller":
+            context['false_positive_used'] = getattr(role, 'false_positive_used', False)
 
         elif role_name == "Sheriff":
             context['investigations'] = getattr(role, 'investigations', [])

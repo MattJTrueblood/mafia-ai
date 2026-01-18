@@ -221,7 +221,7 @@ def handle_postgame_reveal(ctx: StepContext) -> StepResult:
     ctx.add_event("system", "ROLE REVEAL:")
 
     for player in ctx.game_state.players:
-        role_text = "mafia" if player.team == "mafia" else player.role.name.lower()
+        role_text = player.role.name.lower()
         ctx.add_event("system", f"{player.name}: {role_text}")
 
     # Human games: go straight to trashtalk (no round-robin discussion, no MVP vote)

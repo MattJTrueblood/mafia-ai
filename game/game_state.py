@@ -65,7 +65,8 @@ class GameState:
     STEP_GAME_END = "game_end"
 
     def __init__(self, players: List[Dict[str, str]], role_distribution: Dict[str, int],
-                 human_player_name: Optional[str] = None, forced_role: Optional[str] = None):
+                 human_player_name: Optional[str] = None, forced_role: Optional[str] = None,
+                 rules: Optional[Any] = None):
         """
         Initialize game state.
 
@@ -74,8 +75,12 @@ class GameState:
             role_distribution: Dict mapping role names to counts (from UI presets)
             human_player_name: Optional name of the human player
             forced_role: Optional role to force-assign to the human player
+            rules: Optional custom GameRules (uses DEFAULT_RULES if None)
         """
+        from .rules import DEFAULT_RULES
+
         self.game_id = str(uuid.uuid4())
+        self.rules = rules or DEFAULT_RULES  # Store rules for this game
         self.players = []
         self.phase = "day"  # Start in day phase for introduction day
         self.day_number = 1  # Day 1 is introduction day

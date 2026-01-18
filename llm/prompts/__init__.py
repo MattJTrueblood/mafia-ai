@@ -148,7 +148,7 @@ def build_day_voting_prompt(game_state, player) -> str:
     builder = ContextBuilder(game_state)
 
     alive_players = game_state.get_alive_players()
-    available_targets = [p.name for p in alive_players if p.name != player.name]
+    available_targets = [p.name for p in alive_players]  # Self-votes allowed
 
     context = builder.build_context(
         player=player,

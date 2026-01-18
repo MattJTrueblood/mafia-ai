@@ -12,7 +12,7 @@ from typing import List
 from . import register_handler, STEP_HANDLERS
 from ..runner import StepResult, StepContext
 from ..game_state import GameState
-from ..rules import can_doctor_protect, DEFAULT_RULES
+from ..rules import can_doctor_protect, get_investigation_result, DEFAULT_RULES
 from ..llm_caller import (
     call_llm, parse_target, parse_text, build_target_schema
 )
@@ -32,7 +32,7 @@ from llm.prompts import (
 
 def get_mafia_visibility(game_state: GameState) -> List[str]:
     """Get list of mafia player names for event visibility."""
-    return [p.name for p in game_state.players if p.role and p.role.name == "Mafia"]
+    return [p.name for p in game_state.players if p.role and p.role.name in ("Mafia", "Godfather")]
 
 
 def should_write_night_scratchpad(player) -> bool:
@@ -45,7 +45,7 @@ def should_write_night_scratchpad(player) -> bool:
     if player.is_human:
         return False
     role_name = player.role.name if player.role else None
-    return role_name in ["Doctor", "Sheriff", "Vigilante", "Mafia"]
+    return role_name in ["Doctor", "Sheriff", "Vigilante", "Mafia", "Godfather"]
 
 
 # =============================================================================
@@ -291,7 +291,7 @@ def handle_scratchpad_night_start(ctx: StepContext) -> StepResult:
 @register_handler("mafia_discussion")
 def handle_mafia_discussion(ctx: StepContext) -> StepResult:
     """Mafia members discuss who to kill. Waits for human input if mafia member is human."""
-    mafia_players = ctx.get_players_by_role("Mafia")
+    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
     mafia_visibility = get_mafia_visibility(ctx.game_state)
     index = ctx.step_index
 
@@ -340,7 +340,7 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
 @register_handler("mafia_vote")
 def handle_mafia_vote(ctx: StepContext) -> StepResult:
     """Mafia members vote on kill target. Human mafia votes first, then AI in parallel."""
-    mafia_players = ctx.get_players_by_role("Mafia")
+    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
     mafia_visibility = get_mafia_visibility(ctx.game_state)
     discussion_messages = ctx.phase_data.get("mafia_discussion_messages", [])
     alive_names = [p.name for p in ctx.get_alive_players()]
@@ -574,7 +574,24 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
     if target:
         target_player = ctx.get_player_by_name(target)
         if target_player:
-            result = "mafia" if target_player.team == "mafia" else "not mafia"
+            # Use investigation helper that handles Godfather/Miller special cases
+            result, ability_triggered = get_investigation_result(
+                ctx.rules, target_player, ctx.game_state
+            )
+
+            # Track investigations this night for multi-sheriff immunity handling
+            night_key = f"night_{ctx.day_number}_investigated"
+            if night_key not in ctx.phase_data:
+                ctx.phase_data[night_key] = set()
+
+            # Consume immunity/false-positive only once per night (even with multiple sheriffs)
+            if ability_triggered and target not in ctx.phase_data[night_key]:
+                ctx.phase_data[night_key].add(target)
+                if target_player.role.name == "Godfather":
+                    target_player.role.investigation_immunity_used = True
+                elif target_player.role.name == "Miller":
+                    target_player.role.false_positive_used = True
+
             sheriff.role.investigations.append((target, result))
 
             ctx.add_event("role_action", f"Sheriff {sheriff.name} investigates {target}.",
