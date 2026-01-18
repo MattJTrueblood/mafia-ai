@@ -8,7 +8,6 @@ import json
 import logging
 import random
 import gevent
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from . import register_handler, STEP_HANDLERS
@@ -19,12 +18,17 @@ from ..llm_caller import (
     call_llm, parse_text, parse_vote, parse_turn_poll,
     VOTE_SCHEMA, TURN_POLL_SCHEMA
 )
+from ..utils import (
+    execute_parallel,
+    execute_scratchpad_writing,
+    select_speaker_by_recency,
+    wait_for_human_input,
+)
 from llm.prompts import (
     build_day_discussion_prompt,
     build_turn_poll_prompt,
     build_day_voting_prompt,
     build_introduction_prompt,
-    build_scratchpad_prompt,
 )
 from llm.openrouter_client import LLMCancelledException
 
@@ -32,30 +36,6 @@ from llm.openrouter_client import LLMCancelledException
 # =============================================================================
 # EXECUTOR HELPERS
 # =============================================================================
-
-def execute_scratchpad_writing(ctx: StepContext, player, timing: str) -> str:
-    """Execute scratchpad writing for a single player."""
-    prompt = build_scratchpad_prompt(ctx.game_state, player, timing)
-    messages = [{"role": "user", "content": prompt}]
-
-    response = call_llm(
-        player, ctx.llm_client, messages, f"scratchpad_{timing}", ctx.game_state,
-        temperature=0.7, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
-    )
-
-    note = parse_text(response, player.name)
-
-    if note:
-        player.scratchpad.append({
-            "day": ctx.day_number,
-            "phase": ctx.phase,
-            "timing": timing,
-            "note": note,
-            "timestamp": datetime.now().isoformat()
-        })
-
-    return note
-
 
 def get_introduction_message(ctx: StepContext, player) -> Optional[str]:
     """Get an introduction message from a player on Day 1."""
@@ -189,21 +169,6 @@ def poll_for_turn_actions(ctx: StepContext, exclude_player: str) -> tuple:
     return interrupting, responding, passing
 
 
-def select_speaker_by_recency(candidates: List[str], game_state: GameState) -> str:
-    """Select candidate whose last message was least recent."""
-    if len(candidates) == 1:
-        return candidates[0]
-
-    last_indices = game_state.phase_data.get("player_last_message_index", {})
-
-    def recency_key(name):
-        return last_indices.get(name, -1)
-
-    min_index = min(recency_key(c) for c in candidates)
-    tied = [c for c in candidates if recency_key(c) == min_index]
-    return random.choice(tied)
-
-
 def resolve_voting(game_state: GameState):
     """Resolve voting and apply lynch. Requires MAJORITY to lynch."""
     votes = game_state.phase_data.get("votes", [])
@@ -243,35 +208,6 @@ def resolve_voting(game_state: GameState):
     else:
         game_state.add_event("vote_result",
             "Nobody died, as no player received a majority of votes.", "all")
-
-
-def execute_parallel(players, func, ctx: StepContext):
-    """Execute a function for multiple players in parallel."""
-    from gevent import Greenlet
-
-    results = []
-    greenlets = []
-
-    for player in players:
-        def worker(p=player):
-            if ctx.is_cancelled():
-                return None
-            result = func(p)
-            return result
-
-        g = Greenlet(worker)
-        greenlets.append(g)
-
-    for g in greenlets:
-        g.start()
-
-    gevent.joinall(greenlets, raise_error=True)
-
-    for g in greenlets:
-        if g.value is not None:
-            results.append(g.value)
-
-    return results
 
 
 # =============================================================================
@@ -352,14 +288,8 @@ def handle_introduction_message(ctx: StepContext) -> StepResult:
     if speaker.is_human:
         logging.info(f"Human player {speaker_name} - waiting for input")
 
-        ctx.game_state.set_waiting_for_human("discussion", {"label": "Introduce yourself"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        human_input = wait_for_human_input(ctx, "discussion", {"label": "Introduce yourself"})
         logging.info(f"Human input received for {speaker_name}: {human_input}")
-        ctx.game_state.clear_waiting_for_human()
 
         if human_input and human_input.get("type") == "discussion":
             introduction = human_input.get("message", "").strip()[:500]
@@ -542,13 +472,7 @@ def handle_discussion_message(ctx: StepContext) -> StepResult:
     # Check if this is a human player
     if speaker.is_human:
         # Wait for human input
-        ctx.game_state.set_waiting_for_human("discussion", {"is_interrupt": is_interrupt})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "discussion", {"is_interrupt": is_interrupt})
 
         if human_input and human_input.get("type") == "discussion":
             message = human_input.get("message", "").strip()[:500]
@@ -627,13 +551,7 @@ def handle_voting(ctx: StepContext) -> StepResult:
     human_player = ctx.game_state.get_human_player()
     if human_player and human_player.alive:
         # Wait for human vote first (but don't reveal it to AI yet)
-        ctx.game_state.set_waiting_for_human("vote", {"options": alive_names})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "vote", {"options": alive_names})
 
         if human_input and human_input.get("type") == "vote":
             vote_target = human_input.get("target", "abstain")

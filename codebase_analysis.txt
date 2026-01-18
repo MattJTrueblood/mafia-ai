@@ -1,0 +1,341 @@
+# Mafia AI Codebase Analysis
+
+## Executive Summary
+
+The codebase is well-organized with clear separation between game logic, LLM integration, and UI. The step-based architecture is particularly good for pause/resume. However, there are significant code duplication issues and several architectural limitations that will become blockers when implementing the planned features in `plans.md`.
+
+---
+
+## 1. Code Duplication Issues
+
+### 1.1 `execute_parallel()` - Duplicated 3 Times
+
+**Locations:**
+- `step_handlers/day.py:248-274`
+- `step_handlers/night.py:216-245`
+- `step_handlers/postgame.py:65-89`
+
+All three are nearly identical implementations of the same pattern. This should be extracted to a shared utility.
+
+### 1.2 `execute_scratchpad_writing()` - Duplicated Twice
+
+**Locations:**
+- `step_handlers/day.py:36-57`
+- `step_handlers/night.py:55-76`
+
+Identical implementations. Should be in a shared module.
+
+### 1.3 `select_speaker_by_recency()` - Duplicated Twice
+
+**Locations:**
+- `step_handlers/day.py:192-204`
+- `step_handlers/postgame.py:182-199`
+
+Nearly identical. Should be shared.
+
+### 1.4 Human Input Waiting Pattern - Repeated 11+ Times
+
+This pattern appears in almost every human-interactive step:
+
+```python
+ctx.game_state.set_waiting_for_human(input_type, context)
+if ctx.emit_game_state:
+    ctx.emit_game_state()
+gevent.sleep(0.05)
+human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+ctx.game_state.clear_waiting_for_human()
+```
+
+**Locations:**
+- `day.py:355-360` (introduction_message)
+- `day.py:545-550` (discussion_message)
+- `day.py:630-635` (voting)
+- `night.py:314-319` (mafia_discussion)
+- `night.py:359-364` (mafia_vote)
+- `night.py:470-475` (doctor_act)
+- `night.py:557-562` (sheriff_act)
+- `night.py:680-685` (vigilante_act)
+- `postgame.py:263-268` (postgame_discussion)
+- `postgame.py:307-312` (mvp_voting)
+- `postgame.py:532-537` (trashtalk_message)
+
+**Recommendation:** Extract to a helper function in `runner.py` or a shared utilities module.
+
+### 1.5 Role Action Handlers Follow Identical Pattern
+
+`doctor_discuss`, `sheriff_discuss`, `vigilante_discuss` and their `_act` counterparts all follow the same template:
+
+1. Get players with role
+2. Check index bounds
+3. Get visibility list
+4. Log "phase begins" on first index
+5. Skip discussion for human
+6. Execute discussion/action
+7. Add event with role-specific message
+8. Return next step
+
+**Example structure appearing 6 times:**
+```python
+@register_handler("<role>_discuss")
+def handle_<role>_discuss(ctx):
+    <role>_players = [p for p in ctx.get_players_by_role("<Role>") if p.alive]
+    index = ctx.step_index
+    if not <role>_players:
+        return StepResult(next_step="<next_role>_discuss", ...)
+    if index >= len(<role>_players):
+        return StepResult(next_step="<role>_act", ...)
+    # ... same pattern
+```
+
+---
+
+## 2. Extendability Issues for Planned Features
+
+### 2.1 Visit Mechanics (Needed for: Grandma, Tracker, Escort)
+
+**Current State:**
+- Actions are direct: "mafia kills Alice", "sheriff investigates Bob"
+- No abstraction of "visiting" a player
+- Night resolution (`resolve_night_actions` in `night.py:175-209`) applies kills without visit tracking
+
+**What's Needed:**
+- Grandma kills anyone who visits her
+- Tracker sees who their target visited
+- Escort visits to roleblock (blocks visits and actions)
+
+**Gap:** There's no `visit` concept. Currently impossible to determine "who visited whom."
+
+### 2.2 Role Conversion (Needed for: Executioner, Amnesiac)
+
+**Current State:**
+- Roles assigned in `game_state.py:151-186`, never change
+- No `Player.set_role()` method
+- Win condition assumes static roles
+
+**What's Needed:**
+- Executioner -> Jester or Survivor when target dies non-lynch
+- Amnesiac -> any dead player's role
+- Role change events in log
+
+**Gap:** No mechanism for role conversion mid-game.
+
+### 2.3 Sub-factions / Private Groups (Needed for: Mason)
+
+**Current State:**
+- Two hardcoded teams: mafia, town (plus third_party)
+- Mafia private chat uses explicit name list in `get_mafia_visibility()`:
+  ```python
+  return [p.name for p in game_state.players if p.role.name in ("Mafia", "Godfather")]
+  ```
+
+**What's Needed:**
+- Masons are town but have private night chat (like mafia)
+- Generic "group" concept that can have private communication
+
+**Gap:** Visibility is hardcoded to mafia team, not extensible to arbitrary groups.
+
+### 2.4 Dead Player Interaction (Needed for: Medium)
+
+**Current State:**
+- Dead players excluded from all night actions
+- `get_alive_players()` used everywhere for targets
+
+**What's Needed:**
+- Medium targets dead players
+- Dead player responds (yes/no/unknown)
+- Different target pool for different abilities
+
+**Gap:** No infrastructure for dead player targeting or responses.
+
+### 2.5 Compositional Win Conditions (Needed for: Survivor, Executioner)
+
+**Current State (`win_conditions.py`):**
+```python
+def check_win_conditions(game_state) -> Optional[str]:
+    # Returns "mafia", "town", or None
+    # Jester handled separately in voting resolution
+```
+
+**What's Needed:**
+- Survivor wins if alive at game end (can win alongside mafia OR town)
+- Executioner wins if their target was lynched
+- Multiple players can win simultaneously
+
+**Gap:** Win conditions are mutually exclusive. Need compositional wins.
+
+### 2.6 Role Blocking (Needed for: Escort)
+
+**Current State:**
+- Night actions always succeed (unless doctor protection)
+- No "designated killer" for mafia (all mafia vote, majority wins)
+
+**What's Needed:**
+- Escort blocks a player's action
+- For Grandma: mafia needs a designated attacker (who visits)
+- Blocked actions don't fire
+
+**Gap:** No action blocking system.
+
+---
+
+## 3. Architectural Recommendations
+
+### 3.1 Immediate Fixes (Code Quality)
+
+**A. Create `game/utils.py` with shared functions:**
+```python
+# Extract from day.py, night.py, postgame.py
+def execute_parallel(players, func, ctx): ...
+def execute_scratchpad_writing(ctx, player, timing): ...
+def select_speaker_by_recency(candidates, game_state): ...
+def wait_for_human_input(ctx, input_type, context): ...
+```
+
+**B. Consider generic role handler:**
+Instead of 6 separate handlers, use a data-driven approach:
+```python
+NIGHT_ROLES = {
+    "Doctor": {"next_role": "Sheriff", "action_label": "Protect Someone"},
+    "Sheriff": {"next_role": "Vigilante", "action_label": "Investigate Someone"},
+    "Vigilante": {"next_role": None, "action_label": "Shoot Someone (or Pass)"},
+}
+
+@register_handler("role_discuss")  # Generic handler
+@register_handler("role_act")      # Generic handler
+```
+
+### 3.2 Medium-Term (For Upcoming Features)
+
+**A. Night Action Abstraction:**
+```python
+@dataclass
+class NightAction:
+    actor: str
+    target: Optional[str]
+    action_type: str  # "kill", "protect", "investigate", "block", "track"
+    priority: int     # Resolution order
+    is_visit: bool    # Does this count as visiting?
+    blocked: bool = False
+    data: dict = field(default_factory=dict)
+```
+
+**B. Night Resolution Pipeline:**
+```python
+def resolve_night(game_state, actions: List[NightAction]):
+    # 1. Apply blocks (escort)
+    for action in actions:
+        if action.action_type == "block":
+            block_target_actions(actions, action.target)
+
+    # 2. Check visits for Grandma
+    for action in actions:
+        if action.is_visit and not action.blocked:
+            grandma_check(game_state, action)
+
+    # 3. Apply protections
+    protected = {a.target for a in actions if a.action_type == "protect" and not a.blocked}
+
+    # 4. Apply kills (filtered by protection)
+    # 5. Apply investigations
+    # ...
+```
+
+**C. Role Conversion System:**
+```python
+class Player:
+    def convert_to_role(self, new_role: Role, reason: str):
+        old_role = self.role
+        self.role = new_role
+        self.team = new_role.team
+        # Keep relevant state? (e.g., investigations if converting Sheriff->Sheriff)
+        return RoleConversionEvent(self.name, old_role, new_role, reason)
+```
+
+**D. Win Condition Registry:**
+```python
+@dataclass
+class WinCondition:
+    name: str
+    check: Callable[[GameState, Player], bool]
+    exclusive: bool  # If True, game ends. If False, can win alongside others.
+    message: str
+
+def check_all_wins(game_state) -> List[Tuple[Player, WinCondition]]:
+    winners = []
+    for player in game_state.players:
+        for condition in get_win_conditions_for_role(player.role):
+            if condition.check(game_state, player):
+                winners.append((player, condition))
+    return winners
+```
+
+### 3.3 Long-Term (Architectural)
+
+**A. Group-Based Visibility:**
+```python
+@dataclass
+class VisibilityGroup:
+    name: str  # "mafia", "masons", "lovers"
+    members: List[str]
+
+class GameState:
+    visibility_groups: Dict[str, VisibilityGroup]
+
+    def get_group_visibility(self, group_name: str) -> List[str]:
+        return self.visibility_groups[group_name].members
+```
+
+**B. Type-Safe Phase Data:**
+```python
+@dataclass
+class NightPhaseData:
+    mafia_discussion_messages: List[Dict]
+    mafia_votes: List[Dict]
+    protected_players: List[str]
+    night_actions: List[NightAction]  # New
+
+@dataclass
+class DayPhaseData:
+    discussion_messages: List[Dict]
+    speaker_order: List[str]
+    votes: List[Dict]
+    # ...
+```
+
+---
+
+## 4. Priority Recommendations
+
+### High Priority (Do First)
+1. **Extract duplicated utilities** - Low risk, immediate cleanup
+2. **Create `wait_for_human_input()` helper** - Used 11+ times
+3. **Plan NightAction abstraction** - Foundation for Grandma, Tracker, Escort
+
+### Medium Priority (Before New Roles)
+4. **Implement visit tracking** - Required for Grandma, Tracker, Escort
+5. **Add role conversion** - Required for Executioner, Amnesiac
+6. **Compositional win conditions** - Required for Survivor, Executioner
+
+### Lower Priority (Nice to Have)
+7. **Generic role handlers** - Reduces boilerplate
+8. **Group-based visibility** - Cleaner than hardcoded mafia check
+9. **Type-safe phase data** - Better IDE support and bug prevention
+
+---
+
+## 5. Suggested Refactoring Order
+
+Given `plans.md`, I'd suggest this order:
+
+1. **Extract shared utilities** (immediate, low risk)
+2. **Add Night Action abstraction** (enables visit mechanics)
+3. **Implement Survivor** (simplest new win condition - just "am I alive?")
+4. **Implement Mason** (tests group visibility)
+5. **Implement Tracker** (tests visit tracking read)
+6. **Implement Escort** (tests action blocking)
+7. **Implement Grandma** (tests visit consequences)
+8. **Implement Executioner** (tests role conversion + custom win)
+9. **Implement Amnesiac** (complex role conversion)
+10. **Implement Medium** (dead player interaction)
+
+This order builds features incrementally, with each feature testing one new system.

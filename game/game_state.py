@@ -4,6 +4,7 @@ import random
 import uuid
 from typing import List, Dict, Optional, Any, Union
 from .roles import Role, ROLE_CLASSES
+from .visibility import VisibilityManager
 
 
 class Player:
@@ -18,11 +19,63 @@ class Player:
         self.is_human = is_human  # True if this is a human player
         self.last_llm_context = None  # Stores most recent LLM prompt/response for debugging
         self.scratchpad = []  # Private strategic notes written at key decision points
+        self.role_history = []  # Track role changes: [(old_role_name, new_role_name, reason, day)]
 
     def __repr__(self):
         status = "alive" if self.alive else "dead"
         human_tag = " (HUMAN)" if self.is_human else ""
         return f"Player(name={self.name}, role={self.role}, {status}{human_tag})"
+
+    def convert_to_role(self, new_role: Role, reason: str, day_number: int = 0) -> dict:
+        """
+        Convert this player to a new role.
+
+        Used for:
+        - Executioner -> Jester/Survivor when target dies
+        - Amnesiac -> any dead player's role
+
+        Args:
+            new_role: The new Role object to assign
+            reason: Why the conversion happened
+            day_number: Current day number for logging
+
+        Returns:
+            Dict with conversion details for event logging
+        """
+        old_role = self.role
+        old_role_name = old_role.name if old_role else "None"
+        old_team = self.team
+
+        # Record history
+        self.role_history.append({
+            "old_role": old_role_name,
+            "new_role": new_role.name,
+            "reason": reason,
+            "day": day_number
+        })
+
+        # Update role and team
+        self.role = new_role
+        self.team = new_role.team
+
+        return {
+            "player": self.name,
+            "old_role": old_role_name,
+            "old_team": old_team,
+            "new_role": new_role.name,
+            "new_team": new_role.team,
+            "reason": reason
+        }
+
+    def get_original_role(self) -> str:
+        """Get the player's original role name (before any conversions)."""
+        if self.role_history:
+            return self.role_history[0]["old_role"]
+        return self.role.name if self.role else "None"
+
+    def has_converted(self) -> bool:
+        """Check if this player has undergone a role conversion."""
+        return len(self.role_history) > 0
 
 
 class GameState:
@@ -96,6 +149,9 @@ class GameState:
         # Phase-specific accumulated data (will be initialized after role distribution)
         self.phase_data = {}
 
+        # Visibility manager for group-based event visibility
+        self.visibility_manager = VisibilityManager()
+
         # Human player state
         self.human_player_name = human_player_name
         self.forced_role = forced_role
@@ -114,6 +170,9 @@ class GameState:
 
         # Distribute roles
         self.distribute_roles(role_distribution)
+
+        # Initialize visibility groups based on roles
+        self.visibility_manager.initialize_from_players(self.players)
 
         # Add initial log entry with role counts
         role_counts = {}

@@ -6,7 +6,6 @@ All handlers for night-time actions: mafia discussion/vote, doctor, sheriff, vig
 
 import logging
 import gevent
-from datetime import datetime
 from typing import List
 
 from . import register_handler, STEP_HANDLERS
@@ -16,13 +15,17 @@ from ..rules import can_doctor_protect, get_investigation_result, DEFAULT_RULES
 from ..llm_caller import (
     call_llm, parse_target, parse_text, build_target_schema
 )
+from ..utils import (
+    execute_parallel,
+    execute_scratchpad_writing,
+    wait_for_human_input,
+)
 from llm.prompts import (
     build_mafia_discussion_prompt,
     build_mafia_vote_prompt,
     build_role_discussion_prompt,
     build_role_action_prompt,
     build_sheriff_post_investigation_prompt,
-    build_scratchpad_prompt,
 )
 
 
@@ -51,30 +54,6 @@ def should_write_night_scratchpad(player) -> bool:
 # =============================================================================
 # EXECUTOR HELPERS
 # =============================================================================
-
-def execute_scratchpad_writing(ctx: StepContext, player, timing: str) -> str:
-    """Execute scratchpad writing for a single player."""
-    prompt = build_scratchpad_prompt(ctx.game_state, player, timing)
-    messages = [{"role": "user", "content": prompt}]
-
-    response = call_llm(
-        player, ctx.llm_client, messages, f"scratchpad_{timing}", ctx.game_state,
-        temperature=0.7, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
-    )
-
-    note = parse_text(response, player.name)
-
-    if note:
-        player.scratchpad.append({
-            "day": ctx.day_number,
-            "phase": ctx.phase,
-            "timing": timing,
-            "note": note,
-            "timestamp": datetime.now().isoformat()
-        })
-
-    return note
-
 
 def execute_mafia_discussion(ctx: StepContext, mafia, previous_messages: list) -> str:
     """Execute a mafia member's discussion message."""
@@ -210,42 +189,6 @@ def resolve_night_actions(game_state: GameState):
 
 
 # =============================================================================
-# PARALLEL EXECUTION
-# =============================================================================
-
-def execute_parallel(players, func, ctx: StepContext):
-    """Execute a function for multiple players in parallel using gevent."""
-    import gevent
-    from gevent import Greenlet
-
-    results = []
-    greenlets = []
-
-    for player in players:
-        def worker(p=player):
-            if ctx.is_cancelled():
-                return None
-            result = func(p)
-            if ctx.emit_status:
-                ctx.emit_status("player_complete", player=p.name)
-            return result
-
-        g = Greenlet(worker)
-        greenlets.append(g)
-
-    for g in greenlets:
-        g.start()
-
-    gevent.joinall(greenlets, raise_error=True)
-
-    for g in greenlets:
-        if g.value is not None:
-            results.append(g.value)
-
-    return results
-
-
-# =============================================================================
 # NIGHT START HANDLERS
 # =============================================================================
 
@@ -310,14 +253,7 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
 
     # Check if this mafia member is human
     if mafia.is_human:
-        alive_names = [p.name for p in ctx.get_alive_players()]
-        ctx.game_state.set_waiting_for_human("discussion", {"label": "Mafia Discussion"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "discussion", {"label": "Mafia Discussion"})
 
         if human_input and human_input.get("type") == "discussion":
             message = human_input.get("message", "").strip()[:1000]
@@ -356,13 +292,7 @@ def handle_mafia_vote(ctx: StepContext) -> StepResult:
 
     if human_mafia:
         # Wait for human mafia vote first
-        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Vote to Kill"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "role_action", {"options": alive_names, "label": "Vote to Kill"})
 
         target = None
         if human_input and human_input.get("type") == "role_action":
@@ -467,13 +397,7 @@ def handle_doctor_act(ctx: StepContext) -> StepResult:
 
     # Check if doctor is human
     if doctor.is_human:
-        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Protect Someone"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "role_action", {"options": alive_names, "label": "Protect Someone"})
 
         if human_input and human_input.get("type") == "role_action":
             target = human_input.get("target")
@@ -554,13 +478,7 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
 
     # Check if sheriff is human
     if sheriff.is_human:
-        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Investigate Someone"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "role_action", {"options": alive_names, "label": "Investigate Someone"})
 
         if human_input and human_input.get("type") == "role_action":
             target = human_input.get("target")
@@ -677,13 +595,7 @@ def handle_vigilante_act(ctx: StepContext) -> StepResult:
 
     # Check if vigilante is human
     if vigilante.is_human:
-        ctx.game_state.set_waiting_for_human("role_action", {"options": alive_names, "label": "Shoot Someone (or Pass)"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "role_action", {"options": alive_names, "label": "Shoot Someone (or Pass)"})
 
         if human_input and human_input.get("type") == "role_action":
             target = human_input.get("target")

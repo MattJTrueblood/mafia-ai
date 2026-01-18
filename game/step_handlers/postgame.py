@@ -7,12 +7,16 @@ Handlers for postgame: role reveal, discussion, MVP voting, and trashtalk.
 import logging
 import random
 import gevent
-from gevent import Greenlet
 
 from . import register_handler, STEP_HANDLERS
 from ..runner import StepResult, StepContext
 from ..game_state import GameState
 from ..llm_caller import call_llm, parse_text, parse_mvp_vote, parse_turn_poll, MVP_VOTE_SCHEMA, TURN_POLL_SCHEMA
+from ..utils import (
+    execute_parallel,
+    select_speaker_by_recency,
+    wait_for_human_input,
+)
 from llm.prompts import (
     build_postgame_discussion_prompt, build_mvp_vote_prompt,
     build_trashtalk_poll_prompt, build_trashtalk_message_prompt
@@ -60,33 +64,6 @@ def resolve_mvp_voting(game_state: GameState):
             game_state.add_event("system", f"MVP: {winners[0]} with {max_votes} votes!", "all")
         else:
             game_state.add_event("system", f"MVP tie: {', '.join(winners)} with {max_votes} votes each!", "all")
-
-
-def execute_parallel(players, func, ctx: StepContext):
-    """Execute a function for multiple players in parallel."""
-    results = []
-    greenlets = []
-
-    for player in players:
-        def worker(p=player):
-            if ctx.is_cancelled():
-                return None
-            result = func(p)
-            return result
-
-        g = Greenlet(worker)
-        greenlets.append(g)
-
-    for g in greenlets:
-        g.start()
-
-    gevent.joinall(greenlets, raise_error=True)
-
-    for g in greenlets:
-        if g.value is not None:
-            results.append(g.value)
-
-    return results
 
 
 def poll_for_trashtalk_actions(ctx: StepContext, exclude_player: str) -> tuple:
@@ -179,26 +156,6 @@ def get_trashtalk_message(ctx: StepContext, player, is_interrupt: bool, is_respo
         return None
 
 
-def select_speaker_by_recency(candidates: list, game_state) -> str:
-    """Select speaker who spoke least recently (or random if tie)."""
-    if not candidates:
-        return None
-    if len(candidates) == 1:
-        return candidates[0]
-
-    # Get message indices for each candidate
-    msg_indices = game_state.phase_data.get("player_last_message_index", {})
-    candidates_with_idx = [(name, msg_indices.get(name, -1)) for name in candidates]
-
-    # Sort by index (ascending) - lower index = spoke longer ago
-    candidates_with_idx.sort(key=lambda x: x[1])
-    min_idx = candidates_with_idx[0][1]
-
-    # Get all candidates with the minimum index
-    tied = [name for name, idx in candidates_with_idx if idx == min_idx]
-    return random.choice(tied)
-
-
 # =============================================================================
 # POSTGAME HANDLERS
 # =============================================================================
@@ -260,14 +217,8 @@ def handle_postgame_discussion(ctx: StepContext) -> StepResult:
         if ctx.emit_status:
             ctx.emit_status("waiting_message", waiting_player=player.name, is_interrupt=False, is_respond=False)
 
-        ctx.game_state.set_waiting_for_human("discussion", {"label": "Share your postgame thoughts"})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        human_input = wait_for_human_input(ctx, "discussion", {"label": "Share your postgame thoughts"})
         logging.info(f"Human postgame input received for {player.name}: {human_input}")
-        ctx.game_state.clear_waiting_for_human()
 
         if human_input and human_input.get("type") == "discussion":
             message = human_input.get("message", "").strip()[:500]
@@ -304,14 +255,8 @@ def handle_mvp_voting(ctx: StepContext) -> StepResult:
         if ctx.emit_status:
             ctx.emit_status("waiting_message", waiting_player=human_player.name, is_interrupt=False, is_respond=False)
 
-        ctx.game_state.set_waiting_for_human("mvp_vote", {"options": others})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)  # Yield to allow socket to send before blocking
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
+        human_input = wait_for_human_input(ctx, "mvp_vote", {"options": others})
         logging.info(f"Human MVP vote received for {human_player.name}: {human_input}")
-        ctx.game_state.clear_waiting_for_human()
 
         if human_input and human_input.get("type") == "mvp_vote":
             target = human_input.get("target")
@@ -529,13 +474,7 @@ def handle_trashtalk_message(ctx: StepContext) -> StepResult:
 
     # Check if this is a human player
     if speaker.is_human:
-        ctx.game_state.set_waiting_for_human("discussion", {"label": "Trashtalk!", "is_interrupt": is_interrupt})
-        if ctx.emit_game_state:
-            ctx.emit_game_state()
-        gevent.sleep(0.05)
-
-        human_input = ctx.wait_for_human() if ctx.wait_for_human else None
-        ctx.game_state.clear_waiting_for_human()
+        human_input = wait_for_human_input(ctx, "discussion", {"label": "Trashtalk!", "is_interrupt": is_interrupt})
 
         if human_input and human_input.get("type") == "discussion":
             message = human_input.get("message", "").strip()[:500]
