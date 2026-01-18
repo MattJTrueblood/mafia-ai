@@ -797,13 +797,8 @@ function populateRoleOptions(options, label) {
         select.innerHTML += '<option value="ABSTAIN">Pass / Abstain</option>';
     }
 
-    // Mafia and vigilante can't target themselves, others can
-    const cantTargetSelf = label && (label.includes('Shoot') || label.includes('Vote to Kill'));
-
+    // Allow all targets including self (players can vote to kill/shoot themselves)
     options.forEach(name => {
-        if (cantTargetSelf && name === humanPlayerName) {
-            return; // Skip self for mafia/vigilante
-        }
         select.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
     });
 }

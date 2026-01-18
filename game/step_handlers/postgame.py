@@ -343,8 +343,8 @@ def handle_mvp_voting(ctx: StepContext) -> StepResult:
 
             target, reason = parse_mvp_vote(response)
 
-            # Validate: can't vote for self, must be valid player
-            if target == player.name or (target and target not in all_names):
+            # Validate: must be a valid player (self-votes allowed)
+            if target and target not in all_names:
                 others = [p.name for p in all_players if p.name != player.name]
                 target = random.choice(others) if others else None
                 reason = reason or "Good game."

@@ -17,7 +17,7 @@ MVP VOTING:
 Who was the Most Valuable Player of this game?
 Consider: Who made the best plays? Who had the biggest impact?
 
-You CANNOT vote for yourself.
-Available players: {{ other_players | join(', ') }}
+You can vote for anyone, including yourself.
+Available players: {{ all_players | map(attribute='name') | join(', ') }}
 
 Explain your choice briefly (1-2 sentences).
