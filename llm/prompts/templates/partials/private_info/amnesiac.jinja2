@@ -1,0 +1,29 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, AMNESIAC (third party).
+
+Your goal: Remember a dead player's role to gain a win condition.
+
+ABILITY: Once per game, during the night, you may choose a dead player and assume their role and win condition.
+
+{% if has_remembered %}
+STATUS: You have already used your ability.
+{% else %}
+STATUS: You have not remembered anyone yet. You currently have NO win condition.
+{% endif %}
+
+IMPORTANT:
+- You have NO win condition until you remember someone.
+- If the game ends before you remember, you will not win.
+- You can remember ANY dead player's role, including Mafia (you would join the mafia team).
+- Choose carefully - you can only do this once.
+
+STRATEGY TIPS:
+- Wait until a desirable role dies before using your ability.
+- Town roles like Sheriff or Doctor can be powerful if they died early.
+- If mafia is losing, remembering a mafia member might not be wise.
+- Consider the game state when deciding whose role to assume.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

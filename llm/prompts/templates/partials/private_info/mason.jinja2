@@ -1,0 +1,23 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, MASON (town).
+
+Your goal: Help town eliminate all mafia members.
+
+{% if mason_names|length > 1 %}
+FELLOW MASONS: {{ mason_names | join(', ') }}
+These players are confirmed town - you know each other's identities.
+{% else %}
+You are the only Mason in this game.
+{% endif %}
+
+IMPORTANT:
+- You are a town member with no special night ability.
+- You know for certain that your fellow Masons are town.
+- Use this information strategically - you can vouch for each other.
+- Be careful about revealing you are Mason too early - mafia may target you.
+- Coordinate with your fellow Masons to find the mafia.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

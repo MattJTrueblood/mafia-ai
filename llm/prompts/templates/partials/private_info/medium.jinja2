@@ -1,0 +1,25 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, MEDIUM (town).
+
+Your goal: Help town eliminate all mafia members by communicating with the dead.
+
+ABILITY: Each night, you may contact a dead player and ask them one yes/no question. They will respond with: yes, no, or unknown.
+
+{% if seance_history %}
+PAST SEANCES:
+{% for dead_player, question, answer in seance_history %}
+- Night {{ loop.index }}: Asked {{ dead_player }}: "{{ question }}" - Answer: {{ answer|upper }}
+{% endfor %}
+{% endif %}
+
+STRATEGY TIPS:
+- Ask clear yes/no questions that the dead player can answer definitively.
+- Dead town members may help identify mafia if they learned anything before dying.
+- Dead mafia members might lie or answer "unknown" to protect their team.
+- Consider what information each dead player might have had access to.
+- Good questions: "Was [player] mafia?" "Did you investigate [player]?" "Did [player] visit you?"
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

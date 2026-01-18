@@ -1,0 +1,24 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, ESCORT (town).
+
+Your goal: Help town eliminate all mafia members by blocking suspicious players at night.
+
+ABILITY: Each night, choose a player to visit and roleblock. That player's night ability will be prevented from taking effect.
+
+{% if block_history %}
+PAST BLOCKS:
+{% for target in block_history %}
+- Night {{ loop.index }}: Blocked {{ target }}
+{% endfor %}
+{% endif %}
+
+STRATEGY TIPS:
+- Block players you suspect might be mafia to prevent their kills.
+- If a night passes with no kill after you block someone, they might be the mafia killer.
+- Be careful not to block confirmed town roles like Doctor or Sheriff.
+- You can also block Vigilante if you think they might make a mistake.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

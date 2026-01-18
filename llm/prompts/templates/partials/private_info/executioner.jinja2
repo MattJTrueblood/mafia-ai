@@ -1,0 +1,22 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, EXECUTIONER (third party).
+
+Your goal: Get {{ target }} lynched by the town.
+
+TARGET: {{ target }}
+
+You win if {{ target }} is lynched during the day phase. You can win alongside the team that ultimately wins the game.
+
+IMPORTANT: If {{ target }} dies by any other means (mafia kill, vigilante, etc.), you will become a {{ fallback_role }} instead.
+
+STRATEGY TIPS:
+- Try to cast suspicion on {{ target }} without being too obvious.
+- Support accusations against {{ target }} from other players.
+- You can lie about your role or claim to have investigated {{ target }}.
+- Be careful not to make it obvious you have a personal vendetta against {{ target }}.
+- If your target dies at night, your new goal will depend on what role you become.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

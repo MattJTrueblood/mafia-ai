@@ -1,0 +1,34 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+{% if previous_messages %}
+PREVIOUS DISCUSSION:
+{% for msg in previous_messages %}
+- {{ msg.player }}: {{ msg.message }}
+{% endfor %}
+
+{% endif %}
+MASON DISCUSSION:
+This is the mason discussion phase. You're talking privately with your fellow masons about the game.
+
+You are confirmed town members who know each other. Use this time to:
+- Share your reads on other players
+- Discuss who might be mafia
+- Coordinate your strategy for tomorrow's discussion and vote
+
+Share your thoughts concisely (2-3 sentences max). State your opinion clearly.
+
+Output: plain text (no JSON)
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

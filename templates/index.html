@@ -105,17 +105,18 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 16px;
+            padding: 10px 14px;
             background: rgba(255,255,255,0.05);
             border-radius: 8px;
             user-select: none;
+            font-size: 14px;
         }
         .advanced-rules-header:hover {
             background: rgba(255,255,255,0.08);
         }
         .advanced-rules-content {
             display: none;
-            padding: 16px;
+            padding: 12px;
             background: rgba(255,255,255,0.03);
             border-radius: 0 0 8px 8px;
             margin-top: 2px;
@@ -123,33 +124,50 @@
         .advanced-rules-content.visible {
             display: block;
         }
+        .rules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 10px;
+        }
         .rule-group {
-            margin-bottom: 16px;
+            background: rgba(255,255,255,0.03);
+            padding: 8px 10px;
+            border-radius: 6px;
+            border-left: 3px solid #444;
         }
         .rule-group h4 {
-            margin-bottom: 8px;
-            color: #aaa;
-            font-size: 14px;
+            margin: 0 0 6px 0;
+            color: #777;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
         }
         .rule-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-            padding: 8px 0;
+            justify-content: space-between;
+            padding: 3px 0;
         }
         .rule-item label {
-            flex: 1;
-            font-size: 14px;
+            font-size: 12px;
+            color: #bbb;
         }
         .rule-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+            width: 14px;
+            height: 14px;
+            margin-left: 8px;
         }
-        .rule-item input[type="number"] {
+        .rule-item input[type="number"],
+        .rule-item select {
             width: 60px;
-            padding: 6px;
+            padding: 3px 5px;
             text-align: center;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
         }
         .chevron {
             transition: transform 0.2s;
@@ -165,24 +183,45 @@
 
         <h3>Presets</h3>
         <div class="preset-buttons">
+            <!-- Classic Setups -->
             <button type="button" data-preset="micro">Micro (5)</button>
             <button type="button" data-preset="classic">Classic (7)</button>
             <button type="button" data-preset="standard" class="active">Standard (9)</button>
             <button type="button" data-preset="competitive">Competitive (10)</button>
             <button type="button" data-preset="large">Large (12)</button>
-            <button type="button" data-preset="violent">Violent (9)</button>
             <button type="button" data-preset="mountainous">Mountainous (11)</button>
-            <button type="button" data-preset="micro_jester">Micro Jester (6)</button>
-            <button type="button" data-preset="classic_jester">Classic Jester (10)</button>
+            <!-- Action Setups -->
+            <button type="button" data-preset="violent">Violent (9)</button>
             <button type="button" data-preset="powderkeg">Powderkeg (9)</button>
-            <button type="button" data-preset="carnival">Carnival (10)</button>
+            <button type="button" data-preset="blockade">Blockade (8)</button>
+            <button type="button" data-preset="grannys_house">Granny's House (9)</button>
+            <!-- Deception Setups -->
             <button type="button" data-preset="deception">Deception (9)</button>
             <button type="button" data-preset="fog_of_war">Fog of War (7)</button>
             <button type="button" data-preset="hall_of_mirrors">Hall of Mirrors (10)</button>
+            <button type="button" data-preset="witch_hunt">Witch Hunt (10)</button>
+            <!-- Third Party Chaos -->
+            <button type="button" data-preset="micro_jester">Micro Jester (6)</button>
+            <button type="button" data-preset="classic_jester">Classic Jester (10)</button>
+            <button type="button" data-preset="carnival">Carnival (10)</button>
+            <button type="button" data-preset="wildcards">Wildcards (10)</button>
+            <button type="button" data-preset="free_for_all">Free For All (9)</button>
+            <!-- Information Setups -->
+            <button type="button" data-preset="the_watchers">The Watchers (9)</button>
+            <button type="button" data-preset="haunted">Haunted (9)</button>
+            <button type="button" data-preset="detective_agency">Detective Agency (10)</button>
+            <!-- Team Setups -->
+            <button type="button" data-preset="secret_brotherhood">Secret Brotherhood (9)</button>
+            <button type="button" data-preset="twin_peaks">Twin Peaks (7)</button>
+            <!-- Kitchen Sink -->
+            <button type="button" data-preset="full_menagerie">Full Menagerie (17)</button>
+            <button type="button" data-preset="small_menagerie">Small Menagerie (14)</button>
+            <button type="button" data-preset="chaos">Chaos (12)</button>
         </div>
 
         <h3>Role Configuration</h3>
         <div class="role-config">
+            <!-- Mafia Team -->
             <div class="role-input">
                 <label>Mafia:</label>
                 <input type="number" id="role-mafia" min="0" max="10" value="2">
@@ -191,6 +230,7 @@
                 <label>Godfather:</label>
                 <input type="number" id="role-godfather" min="0" max="3" value="0">
             </div>
+            <!-- Town Basic -->
             <div class="role-input">
                 <label>Villager:</label>
                 <input type="number" id="role-villager" min="0" max="20" value="4">
@@ -199,6 +239,11 @@
                 <label>Miller:</label>
                 <input type="number" id="role-miller" min="0" max="3" value="0">
             </div>
+            <div class="role-input">
+                <label>Mason:</label>
+                <input type="number" id="role-mason" min="0" max="5" value="0">
+            </div>
+            <!-- Town Power -->
             <div class="role-input">
                 <label>Sheriff:</label>
                 <input type="number" id="role-sheriff" min="0" max="3" value="1">
@@ -212,8 +257,37 @@
                 <input type="number" id="role-vigilante" min="0" max="3" value="1">
             </div>
             <div class="role-input">
+                <label>Tracker:</label>
+                <input type="number" id="role-tracker" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Escort:</label>
+                <input type="number" id="role-escort" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Medium:</label>
+                <input type="number" id="role-medium" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Grandma:</label>
+                <input type="number" id="role-grandma" min="0" max="3" value="0">
+            </div>
+            <!-- Third Party -->
+            <div class="role-input">
                 <label>Jester:</label>
                 <input type="number" id="role-jester" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Survivor:</label>
+                <input type="number" id="role-survivor" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Executioner:</label>
+                <input type="number" id="role-executioner" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Amnesiac:</label>
+                <input type="number" id="role-amnesiac" min="0" max="3" value="0">
             </div>
         </div>
 
@@ -247,79 +321,92 @@
                 <span>Customize game rules (click to expand)</span>
             </div>
             <div id="rules-content" class="advanced-rules-content">
-                <div class="rule-group">
-                    <h4>Day 1 Rules</h4>
-                    <div class="rule-item">
-                        <label>Day 1 round-robin only (no interrupts)</label>
-                        <input type="checkbox" id="rule-day1-round-robin" checked>
+                <div class="rules-grid">
+                    <div class="rule-group">
+                        <h4>Day 1</h4>
+                        <div class="rule-item">
+                            <label>Round-robin discussion only</label>
+                            <input type="checkbox" id="rule-day1-round-robin" checked>
+                        </div>
+                        <div class="rule-item">
+                            <label>No day 1 lynch vote</label>
+                            <input type="checkbox" id="rule-day1-no-lynch" checked>
+                        </div>
                     </div>
-                    <div class="rule-item">
-                        <label>Day 1 no lynch</label>
-                        <input type="checkbox" id="rule-day1-no-lynch" checked>
+                    <div class="rule-group">
+                        <h4>Doctor</h4>
+                        <div class="rule-item">
+                            <label>Consecutive protects allowed</label>
+                            <input type="checkbox" id="rule-doctor-same-twice">
+                        </div>
+                        <div class="rule-item">
+                            <label>Self-protect allowed</label>
+                            <input type="checkbox" id="rule-doctor-self-protect" checked>
+                        </div>
                     </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Doctor Rules</h4>
-                    <div class="rule-item">
-                        <label>Can protect same player twice in a row</label>
-                        <input type="checkbox" id="rule-doctor-same-twice">
+                    <div class="rule-group">
+                        <h4>Vigilante</h4>
+                        <div class="rule-item">
+                            <label>Can abstain</label>
+                            <input type="checkbox" id="rule-vigilante-abstain" checked>
+                        </div>
+                        <div class="rule-item">
+                            <label># of Bullets</label>
+                            <input type="number" id="rule-vigilante-bullets" min="1" max="5" value="1">
+                        </div>
                     </div>
-                    <div class="rule-item">
-                        <label>Can self-protect</label>
-                        <input type="checkbox" id="rule-doctor-self-protect" checked>
+                    <div class="rule-group">
+                        <h4>Godfather</h4>
+                        <div class="rule-item">
+                            <label>Appears as mafia when final surviving</label>
+                            <input type="checkbox" id="rule-godfather-requires-mafia">
+                        </div>
+                        <div class="rule-item">
+                            <label>Only appears not mafia on first investigation</label>
+                            <input type="checkbox" id="rule-godfather-single-use">
+                        </div>
                     </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Vigilante Rules</h4>
-                    <div class="rule-item">
-                        <label>Can abstain (choose not to shoot)</label>
-                        <input type="checkbox" id="rule-vigilante-abstain" checked>
+                    <div class="rule-group">
+                        <h4>Miller</h4>
+                        <div class="rule-item">
+                            <label>Only appears mafia on first investigation</label>
+                            <input type="checkbox" id="rule-miller-single-use">
+                        </div>
                     </div>
-                    <div class="rule-item">
-                        <label>Number of bullets</label>
-                        <input type="number" id="rule-vigilante-bullets" min="1" max="5" value="1">
+                    <div class="rule-group">
+                        <h4>Executioner</h4>
+                        <div class="rule-item">
+                            <label>If target dies early, becomes: </label>
+                            <select id="rule-executioner-becomes">
+                                <option value="Jester" selected>Jester</option>
+                                <option value="Survivor">Survivor</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Godfather Rules</h4>
-                    <div class="rule-item">
-                        <label>Immunity requires other mafia alive</label>
-                        <input type="checkbox" id="rule-godfather-requires-mafia">
+                    <div class="rule-group">
+                        <h4>Amnesiac</h4>
+                        <div class="rule-item">
+                            <label>Public message when amnesiac remembers role</label>
+                            <input type="checkbox" id="rule-amnesiac-announce">
+                        </div>
                     </div>
-                    <div class="rule-item">
-                        <label>Single-use immunity (consumed after first investigation)</label>
-                        <input type="checkbox" id="rule-godfather-single-use">
+                    <div class="rule-group">
+                        <h4>Voting</h4>
+                        <div class="rule-item">
+                            <label>Absolute majority required to lynch</label>
+                            <input type="checkbox" id="rule-require-majority" checked>
+                        </div>
+                        <div class="rule-item">
+                            <label>Allow no-lynch</label>
+                            <input type="checkbox" id="rule-allow-no-lynch" checked>
+                        </div>
                     </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Miller Rules</h4>
-                    <div class="rule-item">
-                        <label>Single-use false positive (second investigation shows true alignment)</label>
-                        <input type="checkbox" id="rule-miller-single-use">
-                    </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Voting Rules</h4>
-                    <div class="rule-item">
-                        <label>Require majority to lynch</label>
-                        <input type="checkbox" id="rule-require-majority" checked>
-                    </div>
-                    <div class="rule-item">
-                        <label>Allow no-lynch (ties = nobody dies)</label>
-                        <input type="checkbox" id="rule-allow-no-lynch" checked>
-                    </div>
-                </div>
-
-                <div class="rule-group">
-                    <h4>Discussion Rules</h4>
-                    <div class="rule-item">
-                        <label>Max discussion messages before vote</label>
-                        <input type="number" id="rule-max-discussion" min="5" max="30" value="10">
+                    <div class="rule-group">
+                        <h4>Discussion</h4>
+                        <div class="rule-item">
+                            <label>Max messages</label>
+                            <input type="number" id="rule-max-discussion" min="5" max="30" value="10">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -355,24 +442,45 @@
         const modelPricing = {{ model_pricing | tojson }};
         const defaultNames = [
             'Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Heidi',
-            'Ivan', 'Judy', 'Kevin', 'Luna', 'Mike', 'Nina', 'Oscar', 'Pam'
+            'Ivan', 'Judy', 'Kevin', 'Luna', 'Mike', 'Nina', 'Oscar', 'Pam', 'Quinn', 'Rita', 'Sam'
         ];
 
         const PRESETS = {
-            micro:         { Mafia: 1, Godfather: 0, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 0, Miller: 0, Villager: 3 },
-            classic:       { Mafia: 2, Godfather: 0, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Miller: 0, Villager: 3 },
-            standard:      { Mafia: 2, Godfather: 0, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Miller: 0, Villager: 4 },
-            competitive:   { Mafia: 3, Godfather: 0, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Miller: 0, Villager: 4 },
-            large:         { Mafia: 3, Godfather: 0, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 0, Miller: 0, Villager: 6 },
-            violent:       { Mafia: 2, Godfather: 0, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 0, Miller: 0, Villager: 4 },
-            mountainous:   { Mafia: 2, Godfather: 0, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 0, Miller: 0, Villager: 9 },
-            micro_jester:  { Mafia: 1, Godfather: 0, Sheriff: 1, Doctor: 0, Vigilante: 0, Jester: 1, Miller: 0, Villager: 3 },
-            classic_jester:{ Mafia: 2, Godfather: 0, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 1, Miller: 0, Villager: 4 },
-            powderkeg:     { Mafia: 2, Godfather: 0, Sheriff: 1, Doctor: 0, Vigilante: 2, Jester: 1, Miller: 0, Villager: 3 },
-            carnival:      { Mafia: 2, Godfather: 0, Sheriff: 0, Doctor: 0, Vigilante: 0, Jester: 2, Miller: 0, Villager: 6 },
-            deception:     { Mafia: 1, Godfather: 1, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Miller: 1, Villager: 4 },
-            fog_of_war:    { Mafia: 0, Godfather: 1, Sheriff: 1, Doctor: 1, Vigilante: 0, Jester: 0, Miller: 1, Villager: 3 },
-            hall_of_mirrors:{ Mafia: 1, Godfather: 1, Sheriff: 2, Doctor: 1, Vigilante: 0, Jester: 0, Miller: 2, Villager: 3 }
+            // Classic Setups
+            micro:         { Mafia: 1, Sheriff: 1, Villager: 3 },
+            classic:       { Mafia: 2, Sheriff: 1, Doctor: 1, Villager: 3 },
+            standard:      { Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Villager: 4 },
+            competitive:   { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Villager: 4 },
+            large:         { Mafia: 3, Sheriff: 1, Doctor: 1, Vigilante: 1, Villager: 6 },
+            mountainous:   { Mafia: 2, Villager: 9 },
+            // Action Setups
+            violent:       { Mafia: 2, Sheriff: 1, Vigilante: 2, Villager: 4 },
+            powderkeg:     { Mafia: 2, Sheriff: 1, Vigilante: 2, Jester: 1, Villager: 3 },
+            blockade:      { Mafia: 2, Escort: 1, Doctor: 1, Sheriff: 1, Villager: 3 },
+            grannys_house: { Mafia: 2, Grandma: 1, Tracker: 1, Doctor: 1, Villager: 4 },
+            // Deception Setups
+            deception:     { Mafia: 1, Godfather: 1, Sheriff: 1, Doctor: 1, Miller: 1, Villager: 4 },
+            fog_of_war:    { Godfather: 1, Sheriff: 1, Doctor: 1, Miller: 1, Villager: 3 },
+            hall_of_mirrors:{ Mafia: 1, Godfather: 1, Sheriff: 2, Doctor: 1, Miller: 2, Villager: 3 },
+            witch_hunt:    { Mafia: 2, Sheriff: 1, Tracker: 1, Executioner: 1, Miller: 1, Villager: 4 },
+            // Third Party Chaos
+            micro_jester:  { Mafia: 1, Sheriff: 1, Jester: 1, Villager: 3 },
+            classic_jester:{ Mafia: 2, Sheriff: 1, Doctor: 1, Vigilante: 1, Jester: 1, Villager: 4 },
+            carnival:      { Mafia: 2, Jester: 2, Villager: 6 },
+            wildcards:     { Mafia: 2, Jester: 1, Survivor: 1, Executioner: 1, Amnesiac: 1, Villager: 4 },
+            free_for_all:  { Mafia: 2, Survivor: 3, Jester: 1, Villager: 3 },
+            // Information Setups
+            the_watchers:  { Mafia: 2, Sheriff: 1, Tracker: 1, Medium: 1, Escort: 1, Villager: 3 },
+            haunted:       { Mafia: 2, Medium: 1, Grandma: 1, Doctor: 1, Villager: 4 },
+            detective_agency: { Mafia: 2, Godfather: 1, Sheriff: 1, Tracker: 1, Medium: 1, Villager: 4 },
+            // Team Setups
+            secret_brotherhood: { Mafia: 2, Mason: 3, Sheriff: 1, Villager: 3 },
+            twin_peaks:    { Mafia: 1, Mason: 2, Sheriff: 1, Villager: 3 },
+            // Kitchen Sink
+            full_menagerie:     { Mafia: 1, Godfather: 1, Sheriff: 1, Doctor: 1, Vigilante: 1, Tracker: 1, Escort: 1, Medium: 1, Grandma: 1, Mason: 2, Jester: 1, Survivor: 1, Executioner: 1, Amnesiac: 1, Villager: 1, Miller: 1 },
+            small_menagerie:  { Mafia: 1, Godfather: 1, Sheriff: 1, Doctor: 1, Vigilante: 1, Tracker: 1, Escort: 1, Medium: 1, Grandma: 1, Mason: 2, Amnesiac: 1, Villager: 1, Miller: 1 },
+            chaos:         { Mafia: 2, Godfather: 1, Jester: 1, Survivor: 1, Executioner: 1, Amnesiac: 1, Grandma: 1, Medium: 1, Villager: 3 }
+            
         };
 
         function formatPricing(modelId) {
@@ -384,14 +492,12 @@
         }
 
         function getTotalPlayers() {
-            return parseInt(document.getElementById('role-mafia').value || 0)
-                 + parseInt(document.getElementById('role-godfather').value || 0)
-                 + parseInt(document.getElementById('role-villager').value || 0)
-                 + parseInt(document.getElementById('role-miller').value || 0)
-                 + parseInt(document.getElementById('role-sheriff').value || 0)
-                 + parseInt(document.getElementById('role-doctor').value || 0)
-                 + parseInt(document.getElementById('role-vigilante').value || 0)
-                 + parseInt(document.getElementById('role-jester').value || 0);
+            const roles = ['mafia', 'godfather', 'villager', 'miller', 'mason', 'sheriff', 'doctor',
+                          'vigilante', 'tracker', 'escort', 'medium', 'grandma', 'jester', 'survivor',
+                          'executioner', 'amnesiac'];
+            return roles.reduce((sum, role) => {
+                return sum + parseInt(document.getElementById(`role-${role}`).value || 0);
+            }, 0);
         }
 
         function getRoleDistribution() {
@@ -400,10 +506,18 @@
                 Godfather: parseInt(document.getElementById('role-godfather').value || 0),
                 Villager: parseInt(document.getElementById('role-villager').value || 0),
                 Miller: parseInt(document.getElementById('role-miller').value || 0),
+                Mason: parseInt(document.getElementById('role-mason').value || 0),
                 Sheriff: parseInt(document.getElementById('role-sheriff').value || 0),
                 Doctor: parseInt(document.getElementById('role-doctor').value || 0),
                 Vigilante: parseInt(document.getElementById('role-vigilante').value || 0),
-                Jester: parseInt(document.getElementById('role-jester').value || 0)
+                Tracker: parseInt(document.getElementById('role-tracker').value || 0),
+                Escort: parseInt(document.getElementById('role-escort').value || 0),
+                Medium: parseInt(document.getElementById('role-medium').value || 0),
+                Grandma: parseInt(document.getElementById('role-grandma').value || 0),
+                Jester: parseInt(document.getElementById('role-jester').value || 0),
+                Survivor: parseInt(document.getElementById('role-survivor').value || 0),
+                Executioner: parseInt(document.getElementById('role-executioner').value || 0),
+                Amnesiac: parseInt(document.getElementById('role-amnesiac').value || 0)
             };
         }
 
@@ -418,6 +532,8 @@
                 godfather_requires_other_mafia: document.getElementById('rule-godfather-requires-mafia').checked,
                 godfather_single_use_immunity: document.getElementById('rule-godfather-single-use').checked,
                 miller_single_use_false_positive: document.getElementById('rule-miller-single-use').checked,
+                executioner_becomes_on_target_death: document.getElementById('rule-executioner-becomes').value || 'Jester',
+                amnesiac_announce_remember: document.getElementById('rule-amnesiac-announce').checked,
                 require_majority_to_lynch: document.getElementById('rule-require-majority').checked,
                 allow_no_lynch: document.getElementById('rule-allow-no-lynch').checked,
                 max_discussion_messages: parseInt(document.getElementById('rule-max-discussion').value) || 10
@@ -428,14 +544,20 @@
             const preset = PRESETS[presetName];
             if (!preset) return;
 
-            document.getElementById('role-mafia').value = preset.Mafia;
-            document.getElementById('role-godfather').value = preset.Godfather || 0;
-            document.getElementById('role-villager').value = preset.Villager;
-            document.getElementById('role-miller').value = preset.Miller || 0;
-            document.getElementById('role-sheriff').value = preset.Sheriff;
-            document.getElementById('role-doctor').value = preset.Doctor;
-            document.getElementById('role-vigilante').value = preset.Vigilante;
-            document.getElementById('role-jester').value = preset.Jester || 0;
+            // All role IDs mapped to their preset keys
+            const roleMap = {
+                'mafia': 'Mafia', 'godfather': 'Godfather', 'villager': 'Villager',
+                'miller': 'Miller', 'mason': 'Mason', 'sheriff': 'Sheriff',
+                'doctor': 'Doctor', 'vigilante': 'Vigilante', 'tracker': 'Tracker',
+                'escort': 'Escort', 'medium': 'Medium', 'grandma': 'Grandma',
+                'jester': 'Jester', 'survivor': 'Survivor', 'executioner': 'Executioner',
+                'amnesiac': 'Amnesiac'
+            };
+
+            // Set all roles from preset (defaulting to 0)
+            for (const [inputId, presetKey] of Object.entries(roleMap)) {
+                document.getElementById(`role-${inputId}`).value = preset[presetKey] || 0;
+            }
 
             // Update active button
             document.querySelectorAll('.preset-buttons button').forEach(btn => {
@@ -496,14 +618,16 @@
             const currentRole = roleSelect.value;
             let roleOptions = '<option value="">Random</option>';
 
-            if (roles.Mafia > 0) roleOptions += `<option value="Mafia"${currentRole === 'Mafia' ? ' selected' : ''}>Mafia</option>`;
-            if (roles.Godfather > 0) roleOptions += `<option value="Godfather"${currentRole === 'Godfather' ? ' selected' : ''}>Godfather</option>`;
-            if (roles.Villager > 0) roleOptions += `<option value="Villager"${currentRole === 'Villager' ? ' selected' : ''}>Villager</option>`;
-            if (roles.Miller > 0) roleOptions += `<option value="Miller"${currentRole === 'Miller' ? ' selected' : ''}>Miller</option>`;
-            if (roles.Sheriff > 0) roleOptions += `<option value="Sheriff"${currentRole === 'Sheriff' ? ' selected' : ''}>Sheriff</option>`;
-            if (roles.Doctor > 0) roleOptions += `<option value="Doctor"${currentRole === 'Doctor' ? ' selected' : ''}>Doctor</option>`;
-            if (roles.Vigilante > 0) roleOptions += `<option value="Vigilante"${currentRole === 'Vigilante' ? ' selected' : ''}>Vigilante</option>`;
-            if (roles.Jester > 0) roleOptions += `<option value="Jester"${currentRole === 'Jester' ? ' selected' : ''}>Jester</option>`;
+            // All roles in display order
+            const allRoles = ['Mafia', 'Godfather', 'Villager', 'Miller', 'Mason', 'Sheriff', 'Doctor',
+                            'Vigilante', 'Tracker', 'Escort', 'Medium', 'Grandma', 'Jester', 'Survivor',
+                            'Executioner', 'Amnesiac'];
+
+            for (const role of allRoles) {
+                if (roles[role] > 0) {
+                    roleOptions += `<option value="${role}"${currentRole === role ? ' selected' : ''}>${role}</option>`;
+                }
+            }
 
             roleSelect.innerHTML = roleOptions;
         }

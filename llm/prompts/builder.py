@@ -122,6 +122,27 @@ class ContextBuilder:
         elif role_name == "Vigilante":
             context['bullet_used'] = getattr(role, 'bullet_used', False)
 
+        elif role_name == "Mason":
+            mason_players = self.game_state.get_players_by_role("Mason")
+            context['mason_names'] = [p.name for p in mason_players]
+
+        elif role_name == "Tracker":
+            context['tracking_results'] = getattr(role, 'tracking_results', [])
+
+        elif role_name == "Escort":
+            context['block_history'] = getattr(role, 'block_history', [])
+
+        elif role_name == "Executioner":
+            context['target'] = getattr(role, 'target', 'Unknown')
+            rules = getattr(self.game_state, 'rules', None) or DEFAULT_RULES
+            context['fallback_role'] = rules.executioner_becomes_on_target_death
+
+        elif role_name == "Amnesiac":
+            context['has_remembered'] = getattr(role, 'has_remembered', False)
+
+        elif role_name == "Medium":
+            context['seance_history'] = getattr(role, 'seance_history', [])
+
         return context
 
     def _get_scratchpad_entries(self, player):

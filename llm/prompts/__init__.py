@@ -207,6 +207,27 @@ def build_mafia_discussion_prompt(game_state, player, previous_messages: List[Di
     )
     return get_template_manager().render('night/mafia_discussion.jinja2', context)
 
+
+def build_mason_discussion_prompt(game_state, player, previous_messages: List[Dict]) -> str:
+    """Build prompt for mason night discussion.
+
+    Args:
+        game_state: Current game state
+        player: The mason player
+        previous_messages: List of previous discussion messages
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    context = builder.build_context(
+        player=player,
+        phase='mason_discussion',
+        previous_messages=previous_messages
+    )
+    return get_template_manager().render('night/mason_discussion.jinja2', context)
+
 def build_role_discussion_prompt(game_state, player, role_type: str, available_targets: List[str]) -> str:
     """Build prompt for role's thinking/discussion phase (before action).
 

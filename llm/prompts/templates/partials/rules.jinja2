@@ -5,49 +5,80 @@ You are playing Mafia, a social deduction game alternating between night and day
 FACTIONS:
 - MAFIA: Know each other, vote together each night on who to kill. Win by eliminating all non-mafia.
 - TOWN: All town-aligned players. Win by eliminating all mafia.
-{% if 'Jester' in roles_in_game -%}
+{% if 'Jester' in roles_in_game or 'Survivor' in roles_in_game or 'Executioner' in roles_in_game or 'Amnesiac' in roles_in_game -%}
 - THIRD PARTY: Independent players with unique win conditions.
 {% endif %}
 
 ROLES:
-{% if 'Mafia' in roles_in_game %}
+{% if 'Mafia' in roles_in_game -%}
 - Mafia: Vote together each night on one person to kill.
 {% endif %}
-{%- if 'Godfather' in roles_in_game %}
+{%- if 'Godfather' in roles_in_game -%}
 - Godfather (MAFIA): Mafia leader who appears as "NOT MAFIA" when investigated by Sheriff.{% if rules.godfather_requires_other_mafia %} Immunity only active when other mafia are alive.{% endif %}{% if rules.godfather_single_use_immunity %} Immunity is consumed after first investigation.{% endif %}
 
 {% endif %}
-{%- if 'Villager' in roles_in_game %}
+{%- if 'Villager' in roles_in_game -%}
 - Villager: Regular town member, no special abilities.
 {% endif %}
-{%- if 'Miller' in roles_in_game %}
+{%- if 'Miller' in roles_in_game -%}
 - Miller (TOWN): Cursed town member who appears as "MAFIA" when investigated by Sheriff.{% if rules.miller_single_use_false_positive %} False reading is consumed after first investigation.{% endif %}
 
 {% endif %}
-{%- if 'Sheriff' in roles_in_game %}
-- Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA")
+{%- if 'Mason' in roles_in_game -%}
+- Mason (TOWN): Knows the identity of other Masons. Masons are confirmed town to each other.
 {% endif %}
-{%- if 'Doctor' in roles_in_game %}
+{%- if 'Sheriff' in roles_in_game -%}
+- Sheriff (TOWN): Investigate one player each night. Result is "MAFIA" or "NOT MAFIA" (third parties show up as "NOT MAFIA").
+{% endif %}
+{%- if 'Doctor' in roles_in_game -%}
 - Doctor (TOWN): Protect one player each night from death.{% if not rules.doctor_can_protect_same_twice %} Cannot protect same person twice in a row.{% endif %}{% if rules.doctor_can_self_protect %} Can protect themselves.{% else %} Cannot protect themselves.{% endif %}
 
 {% endif %}
-{%- if 'Vigilante' in roles_in_game %}
+{%- if 'Vigilante' in roles_in_game -%}
 - Vigilante (TOWN): {{ rules.vigilante_bullets }} bullet{{ 's' if rules.vigilante_bullets > 1 else '' }} for entire game. Can kill one player during any night.{% if rules.vigilante_can_abstain %} Can choose not to shoot.{% endif %}
 
 {% endif %}
-{%- if 'Jester' in roles_in_game %}
-- Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, game ends immediately and Jester wins. Loses if killed at night or if alive at the end of the game.
+{%- if 'Tracker' in roles_in_game -%}
+- Tracker (TOWN): Each night, choose a player to track. Learn who that player visited (if anyone).
+{% endif %}
+{%- if 'Escort' in roles_in_game -%}
+- Escort (TOWN): Each night, choose a player to roleblock. That player's night action is prevented.
+{% endif %}
+{%- if 'Medium' in roles_in_game -%}
+- Medium (TOWN): Each night, may contact a dead player and ask one yes/no question. The dead player answers: yes, no, or unknown.
+{% endif %}
+{%- if 'Grandma' in roles_in_game -%}
+- Grandma (TOWN): Immune to night kills. Anyone who visits Grandma at night dies instead. Has no active ability.
+{% endif %}
+{%- if 'Jester' in roles_in_game -%}
+- Jester (THIRD PARTY): Wins ONLY by being lynched. If lynched, Jester wins (others may also win). Loses if killed at night or survives to game end.
+{% endif %}
+{%- if 'Survivor' in roles_in_game -%}
+- Survivor (THIRD PARTY): Wins by being alive at the end of the game, regardless of which faction wins. Can win alongside mafia or town.
+{% endif %}
+{%- if 'Executioner' in roles_in_game -%}
+- Executioner (THIRD PARTY): Has a secret town target. Wins if that target is lynched. If the target dies by other means, Executioner becomes a {{ rules.executioner_becomes_on_target_death }}.
+{% endif %}
+{%- if 'Amnesiac' in roles_in_game -%}
+- Amnesiac (THIRD PARTY): Has no initial team. Each night, may choose to remember a dead player's role, permanently becoming that role and joining their team.{% if rules.amnesiac_announce_remember %} Role change is announced publicly.{% endif %}
+
 {% endif %}
 
 WIN CONDITIONS:
 - Mafia wins if they equal or outnumber all non-mafia players.
 - Town wins if all mafia are eliminated.
-{% if 'Jester' in roles_in_game %}
-- Jester wins if they are lynched (game ends immediately).
+{% if 'Jester' in roles_in_game -%}
+- Jester wins if they are lynched (can win alongside other factions).
+{% endif %}
+{%- if 'Survivor' in roles_in_game -%}
+- Survivor wins by being alive at game end (can win alongside other factions).
+{% endif %}
+{%- if 'Executioner' in roles_in_game -%}
+- Executioner wins if their target is lynched (can win alongside other factions).
 {% endif %}
 
 PHASES:
-- Night: Mafia votes on kill{% if 'Doctor' in roles_in_game %}, Doctor protects{% endif %}{% if 'Sheriff' in roles_in_game %}, Sheriff investigates{% endif %}{% if 'Vigilante' in roles_in_game %}, Vigilante may kill{% endif %}. All actions resolve simultaneously.
+- Night: Mafia votes on kill{% if 'Doctor' in roles_in_game %}, Doctor protects{% endif %}{% if 'Sheriff' in roles_in_game %}, Sheriff investigates{% endif %}{% if 'Vigilante' in roles_in_game %}, Vigilante may kill{% endif %}{% if 'Tracker' in roles_in_game %}, Tracker tracks{% endif %}{% if 'Escort' in roles_in_game %}, Escort roleblocks{% endif %}{% if 'Medium' in roles_in_game %}, Medium communes with dead{% endif %}{% if 'Amnesiac' in roles_in_game %}, Amnesiac may remember{% endif %}. All actions resolve simultaneously.
 - Day: Players discuss, then vote to lynch.{% if rules.require_majority_to_lynch %} Absolute majority required to lynch.{% endif %}{% if rules.allow_no_lynch %} Ties or no majority = no lynch.{% endif %}{% if rules.day1_no_lynch %} Day 1 has no lynch vote (introduction only).{% endif %}
 
 
@@ -55,6 +86,9 @@ VISIBILITY:
 - Roles are secret unless revealed through gameplay.
 - You only see public events and your own role-specific actions.
 - Only mafia players can see mafia discussions and mafia kill votes.
+{% if 'Mason' in roles_in_game -%}
+- Masons know each other's identities at the start of the game.
+{% endif %}
 - Dead players can still win if their team wins.
 
 STAKES:

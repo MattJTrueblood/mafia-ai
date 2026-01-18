@@ -1,0 +1,24 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, TRACKER (town).
+
+Your goal: Help town eliminate all mafia members by discovering who visits whom at night.
+
+ABILITY: Each night, choose a player to track. You will learn who they visited (if anyone).
+
+{% if tracking_results %}
+PAST TRACKING RESULTS:
+{% for target, visited in tracking_results %}
+- Night {{ loop.index }}: {{ target }} {% if visited %}visited {{ visited }}{% else %}did not visit anyone{% endif %}
+{% endfor %}
+{% endif %}
+
+STRATEGY TIPS:
+- Track players you suspect might be mafia to catch them visiting kill targets.
+- If someone visits a player who dies, they might be mafia.
+- Town roles also visit: Doctor protects, Sheriff investigates, Vigilante kills.
+- A player who never visits might be Villager, Jester, or lying about their role.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

@@ -27,6 +27,11 @@ def get_night_steps(game_state, rules) -> List[str]:
         "mafia_vote",
     ]
 
+    # Add mason discussion if there are multiple masons
+    mason_players = game_state.get_players_by_role("Mason")
+    if len(mason_players) >= 2:
+        steps.append("mason_discussion")
+
     # Add steps for each night-active role in order
     for role_name in rules.night_role_order:
         if game_state.get_players_by_role(role_name):

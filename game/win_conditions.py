@@ -125,10 +125,10 @@ WIN_CONDITIONS: List[WinCondition] = [
     WinCondition(
         name="executioner",
         check=check_executioner_win,
-        exclusive=True,
-        ends_game=True,
-        priority=5,
-        message_template="{player} (EXECUTIONER) WINS! Their target was lynched."
+        exclusive=False,  # Can win alongside the team that wins
+        ends_game=False,
+        priority=90,  # Check after team wins
+        message_template="{player} (EXECUTIONER) also wins! Their target was lynched."
     ),
 
     # Individual wins that don't end game (can win alongside teams)

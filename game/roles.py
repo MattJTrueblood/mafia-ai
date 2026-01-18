@@ -97,6 +97,86 @@ class Jester(Role):
         self.team = "third_party"
 
 
+class Survivor(Role):
+    """Survivor role - third party that wins by surviving to the end."""
+
+    def __init__(self):
+        super().__init__("Survivor")
+        self.team = "third_party"
+
+
+class Mason(Role):
+    """Mason role - town member who knows the other Masons."""
+
+    night_steps = ["mason_discussion"]
+
+    def __init__(self):
+        super().__init__("Mason")
+        self.team = "town"
+
+
+class Tracker(Role):
+    """Tracker role - town member who can see who their target visited."""
+
+    night_steps = ["tracker_discuss", "tracker_act"]
+
+    def __init__(self):
+        super().__init__("Tracker")
+        self.team = "town"
+        self.tracking_results = []  # List of (target, visited) tuples
+
+
+class Escort(Role):
+    """Escort role - town roleblocker who prevents targets from using night abilities."""
+
+    night_steps = ["escort_discuss", "escort_act"]
+
+    def __init__(self):
+        super().__init__("Escort")
+        self.team = "town"
+        self.block_history = []  # List of blocked player names
+
+
+class Grandma(Role):
+    """Grandma role - town member immune to night kills who kills visitors."""
+
+    def __init__(self):
+        super().__init__("Grandma")
+        self.team = "town"
+
+
+class Executioner(Role):
+    """Executioner role - third party who wins by getting their target lynched."""
+
+    def __init__(self):
+        super().__init__("Executioner")
+        self.team = "third_party"
+        self.target = None  # Name of the town player they must get lynched
+        self.has_won = False  # Track if they achieved their win
+
+
+class Amnesiac(Role):
+    """Amnesiac role - third party who can remember a dead player's role."""
+
+    night_steps = ["amnesiac_discuss", "amnesiac_act"]
+
+    def __init__(self):
+        super().__init__("Amnesiac")
+        self.team = "third_party"
+        self.has_remembered = False  # Can only remember once
+
+
+class Medium(Role):
+    """Medium role - town member who can ask dead players yes/no questions."""
+
+    night_steps = ["medium_discuss", "medium_act"]
+
+    def __init__(self):
+        super().__init__("Medium")
+        self.team = "town"
+        self.seance_history = []  # List of (dead_player, question, answer) tuples
+
+
 # Role registry
 ROLE_CLASSES = {
     "Mafia": Mafia,
@@ -107,5 +187,13 @@ ROLE_CLASSES = {
     "Doctor": Doctor,
     "Vigilante": Vigilante,
     "Jester": Jester,
+    "Survivor": Survivor,
+    "Mason": Mason,
+    "Tracker": Tracker,
+    "Escort": Escort,
+    "Grandma": Grandma,
+    "Executioner": Executioner,
+    "Amnesiac": Amnesiac,
+    "Medium": Medium,
 }
 

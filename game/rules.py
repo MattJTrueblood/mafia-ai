@@ -19,7 +19,7 @@ class GameRules:
 
     # Night phase configuration
     night_role_order: List[str] = field(
-        default_factory=lambda: ["Doctor", "Sheriff", "Vigilante"]
+        default_factory=lambda: ["Escort", "Doctor", "Sheriff", "Tracker", "Vigilante", "Medium", "Amnesiac"]
     )
 
     # Doctor rules
@@ -47,6 +47,12 @@ class GameRules:
 
     # Miller rules
     miller_single_use_false_positive: bool = False  # Second investigation reveals true alignment
+
+    # Executioner rules
+    executioner_becomes_on_target_death: str = "Jester"  # Role to become if target dies (not by lynch)
+
+    # Amnesiac rules
+    amnesiac_announce_remember: bool = False  # Publicly announce when amnesiac remembers a role
 
 
 # =============================================================================

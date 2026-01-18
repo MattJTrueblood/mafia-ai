@@ -145,3 +145,44 @@ def wait_for_human_input(ctx: Any, input_type: str, context: dict = None) -> Opt
     ctx.game_state.clear_waiting_for_human()
 
     return human_input
+
+
+def execute_group_discussion(
+    ctx: Any,
+    player: Any,
+    group_name: str,
+    previous_messages: List,
+    prompt_builder: Callable,
+    action_type: str,
+    temperature: float = 0.8
+) -> str:
+    """
+    Execute a private group discussion message for a player.
+
+    Used for both Mafia and Mason night discussions.
+
+    Args:
+        ctx: StepContext with game state and LLM client
+        player: Player object speaking
+        group_name: Name of the group (for logging)
+        previous_messages: List of previous discussion messages
+        prompt_builder: Function that builds the prompt (takes game_state, player, previous_messages)
+        action_type: Action type for LLM logging
+        temperature: LLM temperature setting
+
+    Returns:
+        The discussion message content
+    """
+    from .llm_caller import call_llm, parse_text
+
+    prompt = prompt_builder(ctx.game_state, player, previous_messages)
+    messages = [{"role": "user", "content": prompt}]
+
+    response = call_llm(
+        player, ctx.llm_client, messages, action_type, ctx.game_state,
+        temperature=temperature, cancel_event=ctx.cancel_event,
+        emit_player_status=ctx.emit_player_status
+    )
+
+    content = parse_text(response, player.name, max_length=1000)
+    return content if content else "No comment."
