@@ -356,6 +356,13 @@
                         </div>
                     </div>
                     <div class="rule-group">
+                        <h4>Mafia</h4>
+                        <div class="rule-item">
+                            <label>Select designated killer</label>
+                            <input type="checkbox" id="rule-mafia-select-killer" checked>
+                        </div>
+                    </div>
+                    <div class="rule-group">
                         <h4>Godfather</h4>
                         <div class="rule-item">
                             <label>Appears as mafia when final surviving</label>
@@ -529,6 +536,7 @@
                 doctor_can_self_protect: document.getElementById('rule-doctor-self-protect').checked,
                 vigilante_can_abstain: document.getElementById('rule-vigilante-abstain').checked,
                 vigilante_bullets: parseInt(document.getElementById('rule-vigilante-bullets').value) || 1,
+                mafia_select_killer: document.getElementById('rule-mafia-select-killer').checked,
                 godfather_requires_other_mafia: document.getElementById('rule-godfather-requires-mafia').checked,
                 godfather_single_use_immunity: document.getElementById('rule-godfather-single-use').checked,
                 miller_single_use_false_positive: document.getElementById('rule-miller-single-use').checked,

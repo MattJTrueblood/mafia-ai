@@ -6,18 +6,16 @@
 
 === START PHASE INSTRUCTIONS ===
 
-{% if previous_messages %}
-PREVIOUS DISCUSSION:
-{% for msg in previous_messages %}
-- {{ msg.player }}: {{ msg.message }}
-{% endfor %}
-
-{% endif %}
 MAFIA DISCUSSION:
 This is the mafia discussion phase. You're talking privately with your fellow mafia about who to kill tonight.
 
 Alive players who could be targeted: {{ available_targets | join(', ') }}
 
+{% if rules.mafia_select_killer -%}
+After voting on a target, you will vote on which mafia member performs the kill. The killer can be tracked and roleblocked, so discuss both who to target AND who should carry out the kill.
+{% else -%}
+The mafia member who actually performs the kill will be chosen randomly. Consider this when discussing targets.
+{% endif %}
 Share your thoughts concisely (2-3 sentences max). State your opinion clearly.
 
 Output: plain text (no JSON)

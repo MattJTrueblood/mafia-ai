@@ -10,8 +10,9 @@ FACTIONS:
 {% endif %}
 
 ROLES:
-{% if 'Mafia' in roles_in_game -%}
-- Mafia: Vote together each night on one person to kill.
+{% if 'Mafia' in roles_in_game or 'Godfather' in roles_in_game -%}
+- Mafia: Vote together each night on one person to kill.{% if rules.mafia_select_killer %} After choosing a target, mafia selects which member performs the kill (this affects tracking and roleblocking).{% endif %}
+
 {% endif %}
 {%- if 'Godfather' in roles_in_game -%}
 - Godfather (MAFIA): Mafia leader who appears as "NOT MAFIA" when investigated by Sheriff.{% if rules.godfather_requires_other_mafia %} Immunity only active when other mafia are alive.{% endif %}{% if rules.godfather_single_use_immunity %} Immunity is consumed after first investigation.{% endif %}

@@ -208,6 +208,36 @@ def build_mafia_discussion_prompt(game_state, player, previous_messages: List[Di
     return get_template_manager().render('night/mafia_discussion.jinja2', context)
 
 
+def build_mafia_select_killer_prompt(
+    game_state, player, kill_target: str, mafia_members: List[str],
+    discussion_messages: List[Dict], previous_votes: List[Dict] = None
+) -> str:
+    """Build prompt for mafia selecting who performs the kill.
+
+    Args:
+        game_state: Current game state
+        player: The mafia player voting
+        kill_target: The target they've decided to kill
+        mafia_members: List of alive mafia member names
+        discussion_messages: Previous mafia discussion messages
+        previous_votes: List of previous killer nomination votes
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    context = builder.build_context(
+        player=player,
+        phase='mafia_select_killer',
+        kill_target=kill_target,
+        mafia_members=mafia_members,
+        discussion_messages=discussion_messages or [],
+        previous_votes=previous_votes or []
+    )
+    return get_template_manager().render('night/mafia_select_killer.jinja2', context)
+
+
 def build_mason_discussion_prompt(game_state, player, previous_messages: List[Dict]) -> str:
     """Build prompt for mason night discussion.
 

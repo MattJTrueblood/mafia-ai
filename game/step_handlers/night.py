@@ -5,6 +5,7 @@ All handlers for night-time actions: mafia discussion/vote, doctor, sheriff, vig
 """
 
 import logging
+import random
 import gevent
 from typing import List
 
@@ -23,6 +24,7 @@ from ..utils import (
 from llm.prompts import (
     build_mafia_discussion_prompt,
     build_mafia_vote_prompt,
+    build_mafia_select_killer_prompt,
     build_mason_discussion_prompt,
     build_role_discussion_prompt,
     build_role_action_prompt,
@@ -173,17 +175,19 @@ def resolve_night_actions(game_state: GameState):
 
     # Mafia visit (the designated killer) - only if not blocked
     mafia_target = game_state.phase_data.get("mafia_kill_target")
-    mafia_killer = None  # Track who the designated killer is
-    if mafia_target:
-        mafia_votes = game_state.phase_data.get("mafia_votes", [])
-        # The first mafia who voted for the target is considered the "visitor"
-        for vote in mafia_votes:
-            if vote.get("target") == mafia_target:
-                mafia_killer = vote["player"]
-                # Only record visit if not blocked
-                if mafia_killer not in blocked_players:
-                    visits[mafia_killer] = mafia_target
-                break
+    mafia_killer = game_state.phase_data.get("designated_killer")  # Explicit killer selection
+
+    # Fallback: if no explicit killer, randomly select from alive mafia
+    if mafia_target and not mafia_killer:
+        alive_mafia = [p for p in game_state.players
+                       if p.alive and p.role and p.role.name in ("Mafia", "Godfather")]
+        if alive_mafia:
+            mafia_killer = random.choice(alive_mafia).name
+
+    # Record the visit if killer is set and not blocked
+    if mafia_target and mafia_killer:
+        if mafia_killer not in blocked_players:
+            visits[mafia_killer] = mafia_target
 
     # Doctor visits - only if not blocked
     for doctor_data in game_state.phase_data.get("doctor_protections", []):
@@ -265,9 +269,17 @@ def resolve_night_actions(game_state: GameState):
 
     # Track who visits Grandma (for Grandma's kill ability)
     grandma_visitors = []  # List of (visitor_name, grandma_name)
+    grandmas_who_fired = set()  # Track which grandmas had visitors (fired their shotgun)
     for visitor, visited in visits.items():
         if visited in grandma_names:
             grandma_visitors.append((visitor, visited))
+            grandmas_who_fired.add(visited)
+
+    # Notify each grandma who had a visitor (she fired her shotgun, regardless of outcome)
+    for grandma_name in grandmas_who_fired:
+        game_state.add_event("role_action",
+            "Someone visited you last night. You heard your shotgun go off.",
+            [grandma_name], player=grandma_name, priority=8)
 
     # Mafia kill - only if the designated killer is not blocked
     # Grandma is immune to night kills
@@ -313,12 +325,9 @@ def resolve_night_actions(game_state: GameState):
         target_player = game_state.get_player_by_name(target_name)
         target_player.alive = False
         killed_names.add(target_name)
-        if reason == "grandma_kill":
-            game_state.add_event("death", f"{target_name} visited Grandma and has been found dead!",
-                                "all", metadata={"player": target_name, "reason": reason})
-        else:
-            game_state.add_event("death", f"{target_name} has been found dead, killed during the night!",
-                                "all", metadata={"player": target_name, "reason": reason})
+        # Public death message is identical for all kill types
+        game_state.add_event("death", f"{target_name} has been found dead, killed during the night!",
+                            "all", metadata={"player": target_name, "reason": reason})
 
     # Check if any Executioner's target was killed (not lynched) - convert to fallback role
     if killed_names:
@@ -492,8 +501,114 @@ def handle_mafia_vote(ctx: StepContext) -> StepResult:
 
     tally_mafia_votes(ctx.game_state)
     target = ctx.phase_data.get("mafia_kill_target")
+
+    # If select_killer rule is enabled and there's a target, go to killer selection
+    rules = ctx.game_state.rules
+    if rules.mafia_select_killer and target and len(mafia_players) > 1:
+        ctx.add_event("system", f"Mafia has chosen {target} as the target. Now selecting who performs the kill.", mafia_visibility)
+        return StepResult(next_step="mafia_select_killer", next_index=0)
+
+    # Otherwise, use implicit killer (first voter) and end mafia phase
     if target:
         ctx.add_event("system", f"Mafia has chosen to kill {target}.", mafia_visibility)
+    ctx.add_event("system", "Mafia night actions end.", mafia_visibility)
+
+    return StepResult(next_step="mason_discussion", next_index=0)
+
+
+@register_handler("mafia_select_killer")
+def handle_mafia_select_killer(ctx: StepContext) -> StepResult:
+    """Mafia selects which member performs the kill. All mafia vote, majority wins."""
+    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
+    mafia_visibility = get_mafia_visibility(ctx.game_state)
+    target = ctx.phase_data.get("mafia_kill_target")
+    discussion_messages = ctx.phase_data.get("mafia_discussion_messages", [])
+
+    # Get list of alive mafia who can perform the kill
+    alive_mafia = [m for m in mafia_players if m.alive]
+    mafia_names = [m.name for m in alive_mafia]
+
+    if len(alive_mafia) <= 1:
+        # Only one mafia, they're automatically the killer
+        if alive_mafia:
+            ctx.phase_data["designated_killer"] = alive_mafia[0].name
+            ctx.add_event("system", f"{alive_mafia[0].name} will perform the kill.", mafia_visibility)
+        ctx.add_event("system", "Mafia night actions end.", mafia_visibility)
+        return StepResult(next_step="mason_discussion", next_index=0)
+
+    results = []
+
+    # Check if any mafia member is human - they vote first
+    human_mafia = None
+    for mafia in alive_mafia:
+        if mafia.is_human:
+            human_mafia = mafia
+            break
+
+    if human_mafia:
+        # Human mafia votes first (their vote counts the same as others)
+        human_input = wait_for_human_input(
+            ctx, "role_action",
+            {"options": mafia_names, "label": f"Nominate who performs the kill on {target}"}
+        )
+
+        choice = None
+        if human_input and human_input.get("type") == "role_action":
+            choice = human_input.get("target")
+            if choice and choice not in mafia_names:
+                choice = None
+
+        if not choice:
+            choice = human_mafia.name  # Default to self if no valid selection
+
+        ctx.add_event("mafia_chat", f"[Mafia] {human_mafia.name} nominates {choice} to perform the kill.",
+                      mafia_visibility, player=human_mafia.name, priority=7)
+        results.append({"player": human_mafia.name, "choice": choice})
+
+    # AI mafia vote in parallel
+    ai_mafia = [m for m in alive_mafia if not m.is_human]
+
+    def vote_for_killer(mafia):
+        prompt = build_mafia_select_killer_prompt(
+            ctx.game_state, mafia, target, mafia_names,
+            discussion_messages, results  # Pass previous votes (human's if any)
+        )
+        messages = [{"role": "user", "content": prompt}]
+        killer_schema = build_target_schema(mafia_names, allow_abstain=False)
+
+        response = call_llm(
+            mafia, ctx.llm_client, messages, "select_killer", ctx.game_state,
+            response_format={"type": "json_schema", "json_schema": {"name": "select_killer", "schema": killer_schema}},
+            temperature=0.5, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
+        )
+
+        choice = parse_target(response)
+        if choice not in mafia_names:
+            choice = mafia.name  # Default to self if invalid
+
+        ctx.add_event("mafia_chat", f"[Mafia] {mafia.name} nominates {choice} to perform the kill.",
+                      mafia_visibility, player=mafia.name, priority=7)
+
+        return {"player": mafia.name, "choice": choice}
+
+    if ai_mafia:
+        ai_results = execute_parallel(ai_mafia, vote_for_killer, ctx)
+        results.extend(ai_results)
+
+    # Tally votes
+    killer_votes = {}
+    for result in results:
+        choice = result["choice"]
+        killer_votes[choice] = killer_votes.get(choice, 0) + 1
+
+    # Winner is the one with most votes (ties go to first in vote order)
+    if killer_votes:
+        selected_killer = max(killer_votes.items(), key=lambda x: x[1])[0]
+    else:
+        selected_killer = alive_mafia[0].name
+
+    ctx.phase_data["designated_killer"] = selected_killer
+    ctx.add_event("system", f"{selected_killer} will perform the kill on {target}.", mafia_visibility)
     ctx.add_event("system", "Mafia night actions end.", mafia_visibility)
 
     return StepResult(next_step="mason_discussion", next_index=0)

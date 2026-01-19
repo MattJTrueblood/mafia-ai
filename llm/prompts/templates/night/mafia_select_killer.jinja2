@@ -1,0 +1,21 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+SELECT DESIGNATED KILLER:
+Your team has decided to kill {{ kill_target }} tonight.
+
+Now you must decide which mafia member should perform the kill. Only the designated killer will "visit" the target and be tracked or roleblocked.
+
+Alive mafia members who can perform the kill: {{ mafia_members | join(', ') }}
+
+=== END PHASE INSTRUCTIONS ===
+
+
+
+=== START YOUR OUTPUT ===
+YOUR OUTPUT:

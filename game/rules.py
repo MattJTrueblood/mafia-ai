@@ -54,6 +54,9 @@ class GameRules:
     # Amnesiac rules
     amnesiac_announce_remember: bool = False  # Publicly announce when amnesiac remembers a role
 
+    # Mafia rules
+    mafia_select_killer: bool = True  # Mafia explicitly selects who performs the kill (affects tracking/blocking)
+
 
 # =============================================================================
 # RULE HELPER FUNCTIONS

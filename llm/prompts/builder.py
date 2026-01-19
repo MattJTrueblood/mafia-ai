@@ -23,6 +23,7 @@ class ContextBuilder:
 
     def build_context(self, player, phase=None, **extra):
         """Build complete context for rendering templates."""
+        rules = getattr(self.game_state, 'rules', None) or DEFAULT_RULES
         return {
             'game_rules': self._get_game_rules(),
             'game_log': self._get_game_log(player),
@@ -32,6 +33,7 @@ class ContextBuilder:
             'role_team': player.role.team if player.role else None,
             'day_number': self.game_state.day_number,
             'phase': phase or self.game_state.phase,
+            'rules': rules,  # Make rules available to all templates
             **extra
         }
 

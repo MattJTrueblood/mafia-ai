@@ -397,7 +397,7 @@ function createEventElement(event, playerMap) {
     // Build content based on event type
     let content = '';
 
-    if (['discussion', 'vote', 'mafia_chat', 'role_action'].includes(event.type)) {
+    if (['discussion', 'vote', 'mafia_chat', 'mason_chat', 'role_action'].includes(event.type)) {
         // Message with player name
         const playerInfo = playerMap[event.player] || {};
         const nameClass = getPlayerNameClass(playerInfo);
@@ -447,6 +447,7 @@ function getPlayerNameClass(playerInfo) {
 function getVisibilityLabel(visibility) {
     const labels = {
         'mafia': 'MAFIA ONLY',
+        'masons': 'MASONS ONLY',
         'sheriff': 'SHERIFF ONLY',
         'doctor': 'DOCTOR ONLY',
         'vigilante': 'VIGILANTE ONLY'
