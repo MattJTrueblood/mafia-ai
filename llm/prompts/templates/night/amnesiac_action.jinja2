@@ -1,0 +1,26 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== AMNESIAC ACTION ===
+
+{% if previous_discussion %}
+YOUR PREVIOUS REASONING:
+{{ previous_discussion }}
+
+{% endif %}
+Tonight you may choose to remember a dead player's role and permanently assume their identity and win condition.
+
+Dead players you can remember: {{ dead_players | join(', ') }}
+
+You may also choose to ABSTAIN and wait for a better opportunity.
+
+IMPORTANT REMINDERS:
+- This is a ONE-TIME ability - once you remember, you cannot change your choice
+- You will gain their ROLE and WIN CONDITION (if they were mafia, you become mafia)
+- You currently have NO win condition until you remember someone
+- Consider which roles have died and which team is winning before deciding
+
+Who will you remember tonight (or ABSTAIN to wait)?

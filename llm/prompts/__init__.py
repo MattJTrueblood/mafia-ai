@@ -540,3 +540,70 @@ def build_trashtalk_message_prompt(game_state, player, is_interrupt: bool = Fals
         is_respond=is_respond
     )
     return get_template_manager().render('postgame/trashtalk_message.jinja2', context)
+
+
+def build_amnesiac_action_prompt(game_state, player, dead_players: List[str], previous_discussion: str = "") -> str:
+    """Build prompt for amnesiac's action decision (selecting dead player to remember).
+
+    Args:
+        game_state: Current game state
+        player: The amnesiac player
+        dead_players: List of dead player names that can be remembered
+        previous_discussion: Optional previous thinking/discussion
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    context = builder.build_context(
+        player=player,
+        phase='amnesiac_action',
+        dead_players=dead_players,
+        previous_discussion=previous_discussion
+    )
+    return get_template_manager().render('night/amnesiac_action.jinja2', context)
+
+
+def build_medium_action_prompt(game_state, player, dead_players: List[str], previous_discussion: str = "") -> str:
+    """Build prompt for medium's action decision (selecting dead player and question).
+
+    Args:
+        game_state: Current game state
+        player: The medium player
+        dead_players: List of dead player names that can be contacted
+        previous_discussion: Optional previous thinking/discussion
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    context = builder.build_context(
+        player=player,
+        phase='medium_action',
+        dead_players=dead_players,
+        previous_discussion=previous_discussion
+    )
+    return get_template_manager().render('night/medium_action.jinja2', context)
+
+
+def build_seance_response_prompt(game_state, player, question: str) -> str:
+    """Build prompt for dead player responding to medium's seance question.
+
+    Args:
+        game_state: Current game state
+        player: The dead player being contacted
+        question: The yes/no question asked by the medium
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    context = builder.build_context(
+        player=player,
+        phase='seance_response',
+        question=question
+    )
+    return get_template_manager().render('night/seance_response.jinja2', context)

@@ -28,7 +28,7 @@ from llm.prompts import (
     build_mason_discussion_prompt,
     build_role_discussion_prompt,
     build_role_action_prompt,
-    build_sheriff_post_investigation_prompt,
+    build_seance_response_prompt,
 )
 
 
@@ -50,13 +50,17 @@ def should_write_night_scratchpad(player) -> bool:
     """Determine if AI player should write scratchpad at night start.
 
     Human players don't write scratchpad notes.
+    Roles with night actions get scratchpads to plan their decisions.
     """
     if not player.alive:
         return False
     if player.is_human:
         return False
     role_name = player.role.name if player.role else None
-    return role_name in ["Doctor", "Sheriff", "Vigilante", "Mafia", "Godfather", "Escort", "Tracker"]
+    return role_name in [
+        "Doctor", "Sheriff", "Vigilante", "Mafia", "Godfather",
+        "Escort", "Tracker", "Medium", "Amnesiac"
+    ]
 
 
 # =============================================================================
@@ -121,24 +125,6 @@ def execute_role_action(ctx: StepContext, player, role_type: str) -> str:
         return None
 
 
-def execute_sheriff_post_investigation(ctx: StepContext, sheriff, target: str, result: str) -> str:
-    """Execute sheriff's reaction after seeing investigation result."""
-    prompt = build_sheriff_post_investigation_prompt(ctx.game_state, sheriff, target, result)
-    messages = [{"role": "user", "content": prompt}]
-
-    try:
-        response = call_llm(
-            sheriff, ctx.llm_client, messages, "sheriff_post_investigation", ctx.game_state,
-            temperature=0.8, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
-        )
-
-        content = parse_text(response, sheriff.name, max_length=800)
-        return content if content else None
-    except Exception as e:
-        logging.error(f"Sheriff post-investigation failed for {sheriff.name}: {e}", exc_info=True)
-        return None
-
-
 # =============================================================================
 # RESOLUTION HELPERS
 # =============================================================================
@@ -160,185 +146,288 @@ def tally_mafia_votes(game_state: GameState):
 
 
 def resolve_night_actions(game_state: GameState):
-    """Resolve night actions and apply kills simultaneously."""
-    protected_players = game_state.phase_data.get("protected_players", [])
+    """Resolve night actions and apply kills simultaneously.
+
+    This function is called after all role choices are submitted and after
+    medium/amnesiac resolution (which require LLM calls).
+
+    It handles:
+    - Doctor protection
+    - Grandma immunity
+    - Executioner target death conversion
+    - Simultaneous kill resolution
+    - Tracker and sheriff result delivery
+
+    The resolution follows this order:
+    1. Build blocked_players set (escorts are immune to blocks)
+    2. Build effective_protected set from unblocked doctors
+    3. Build canonical visits map from all night actions
+    4. Process tracker results (before kills, so they see visits even if they die)
+    5. Process sheriff investigation results (before kills, respects roleblock)
+    6. Collect pending kills (checking protection and grandma immunity)
+    7. Apply all kills simultaneously
+    8. Handle executioner conversion if target died
+    9. Notify doctors if they saved someone (optional rule)
+    """
+    rules = getattr(game_state, 'rules', None) or DEFAULT_RULES
+
+    # =============================================================================
+    # PHASE 1: Build blocked_players set
+    # Escorts are immune to roleblocks by design (avoids blocking chains/deadlocks)
+    # =============================================================================
     blocked_players = set(game_state.phase_data.get("blocked_players", []))
 
-    # Build a map of who visited whom for tracker results
+    # Remove escorts from blocked set - they are immune to roleblocks
+    for p in game_state.players:
+        if p.role and p.role.name == "Escort" and p.name in blocked_players:
+            blocked_players.discard(p.name)
+
+    # =============================================================================
+    # PHASE 2: Build effective_protected set from unblocked doctors
+    # Single authoritative source for protection checks
+    # =============================================================================
+    effective_protected = set()
+    doctor_protections = {}  # Maps protected_player -> list of doctor_names (for save notifications)
+
+    for p in game_state.players:
+        if p.role and p.role.name == "Doctor" and p.name not in blocked_players:
+            if hasattr(p.role, 'last_protected') and p.role.last_protected:
+                effective_protected.add(p.role.last_protected)
+                if p.role.last_protected not in doctor_protections:
+                    doctor_protections[p.role.last_protected] = []
+                doctor_protections[p.role.last_protected].append(p.name)
+
+    # =============================================================================
+    # PHASE 3: Build canonical visits map from resolved night actions
+    # All visit assignments happen in this single pass
+    # =============================================================================
     visits = {}  # player_name -> target_name
 
-    # Escort visits (escorts always visit, even if blocking someone)
+    # Escort visits (escorts always visit their target)
     for p in game_state.players:
         if p.role and p.role.name == "Escort" and hasattr(p.role, 'block_history') and p.role.block_history:
-            # Get this night's block target (last in history)
             visits[p.name] = p.role.block_history[-1]
 
-    # Mafia visit (the designated killer) - only if not blocked
-    mafia_target = game_state.phase_data.get("mafia_kill_target")
-    mafia_killer = game_state.phase_data.get("designated_killer")  # Explicit killer selection
+    # Doctor visits (only if not blocked)
+    for p in game_state.players:
+        if p.role and p.role.name == "Doctor" and p.name not in blocked_players:
+            if hasattr(p.role, 'last_protected') and p.role.last_protected:
+                visits[p.name] = p.role.last_protected
 
-    # Fallback: if no explicit killer, randomly select from alive mafia
+    # Mafia kill visit (designated killer, only if not blocked)
+    mafia_target = game_state.phase_data.get("mafia_kill_target")
+    mafia_killer = game_state.phase_data.get("designated_killer")
+
     if mafia_target and not mafia_killer:
         alive_mafia = [p for p in game_state.players
                        if p.alive and p.role and p.role.name in ("Mafia", "Godfather")]
         if alive_mafia:
             mafia_killer = random.choice(alive_mafia).name
 
-    # Record the visit if killer is set and not blocked
-    if mafia_target and mafia_killer:
-        if mafia_killer not in blocked_players:
-            visits[mafia_killer] = mafia_target
+    if mafia_target and mafia_killer and mafia_killer not in blocked_players:
+        visits[mafia_killer] = mafia_target
 
-    # Doctor visits - only if not blocked
-    for doctor_data in game_state.phase_data.get("doctor_protections", []):
-        if doctor_data.get("target"):
-            doctor_name = doctor_data["doctor"]
-            if doctor_name not in blocked_players:
-                visits[doctor_name] = doctor_data["target"]
-    # Also check simple protected_players list with doctor info
-    for p in game_state.players:
-        if p.role and p.role.name == "Doctor" and hasattr(p.role, 'last_protected') and p.role.last_protected:
-            if p.name not in blocked_players:
-                visits[p.name] = p.role.last_protected
-
-    # Filter protected_players to remove protections from blocked doctors
-    effective_protected = []
-    for p in game_state.players:
-        if p.role and p.role.name == "Doctor" and p.name not in blocked_players:
-            if hasattr(p.role, 'last_protected') and p.role.last_protected:
-                effective_protected.append(p.role.last_protected)
-
-    # Vigilante visits - only if not blocked
+    # Vigilante visits (only if not blocked)
     vigilante_kills = game_state.phase_data.get("vigilante_kills", [])
     for vig_data in vigilante_kills:
-        if vig_data.get("target"):
-            vig_name = vig_data["vigilante"]
-            if vig_name not in blocked_players:
-                visits[vig_name] = vig_data["target"]
+        vig_name = vig_data.get("vigilante")
+        vig_target = vig_data.get("target")
+        if vig_target and vig_name not in blocked_players:
+            visits[vig_name] = vig_target
 
-    # Tracker visits - only if not blocked
+    # Tracker visits (only if not blocked)
     tracker_targets = game_state.phase_data.get("tracker_targets", [])
     for track_data in tracker_targets:
         tracker_name = track_data["tracker"]
         if tracker_name not in blocked_players:
             visits[tracker_name] = track_data["target"]
 
-    # Process tracker results BEFORE kills (so tracker can see who visited even if they die)
+    # Sheriff visits (only if not blocked)
+    sheriff_targets = game_state.phase_data.get("sheriff_targets", [])
+    for sheriff_data in sheriff_targets:
+        sheriff_name = sheriff_data["sheriff"]
+        if sheriff_name not in blocked_players:
+            visits[sheriff_name] = sheriff_data["target"]
+
+    # =============================================================================
+    # PHASE 4: Process tracker results (before kills, so tracker sees visits even if they die)
+    # =============================================================================
     for track_data in tracker_targets:
         tracker_name = track_data["tracker"]
         tracked_player = track_data["target"]
         tracker_player = game_state.get_player_by_name(tracker_name)
 
-        # If tracker is blocked, they learn nothing
         if tracker_name in blocked_players:
             if tracker_player and tracker_player.role:
                 tracker_player.role.tracking_results.append((tracked_player, None))
             game_state.add_event("role_action",
-                f"You were blocked and could not track anyone last night.",
+                "You were blocked and could not track anyone last night.",
                 [tracker_name], player=tracker_name, priority=8,
                 metadata={"blocked": True})
             continue
 
-        # Who did the tracked player visit?
         visited = visits.get(tracked_player)
 
-        # Store result on tracker role
         if tracker_player and tracker_player.role:
             tracker_player.role.tracking_results.append((tracked_player, visited))
 
-        # Report result to tracker
-        tracker_visibility = [tracker_name]
         if visited:
             game_state.add_event("role_action",
                 f"Your target {tracked_player} visited {visited} last night.",
-                tracker_visibility, player=tracker_name, priority=8,
+                [tracker_name], player=tracker_name, priority=8,
                 metadata={"tracked": tracked_player, "visited": visited})
         else:
             game_state.add_event("role_action",
                 f"Your target {tracked_player} did not visit anyone last night.",
-                tracker_visibility, player=tracker_name, priority=8,
+                [tracker_name], player=tracker_name, priority=8,
                 metadata={"tracked": tracked_player, "visited": None})
 
-    # Find all Grandma players for immunity and visitor-killing
+    # =============================================================================
+    # PHASE 5: Process sheriff investigation results (before kills, so sheriff gets results even if they die)
+    # Sheriff results are resolved here so escort/roleblock can prevent investigation.
+    # =============================================================================
+    sheriff_targets = game_state.phase_data.get("sheriff_targets", [])
+
+    # Track investigations this night for multi-sheriff immunity handling
+    investigated_this_night = set()
+
+    for sheriff_data in sheriff_targets:
+        sheriff_name = sheriff_data["sheriff"]
+        investigated_target = sheriff_data["target"]
+        sheriff_player = game_state.get_player_by_name(sheriff_name)
+
+        if sheriff_name in blocked_players:
+            game_state.add_event("role_action",
+                "You were blocked and could not investigate anyone last night.",
+                [sheriff_name], player=sheriff_name, priority=8,
+                metadata={"blocked": True})
+            continue
+
+        target_player = game_state.get_player_by_name(investigated_target)
+        if not target_player:
+            continue
+
+        # Use investigation helper that handles Godfather/Miller special cases
+        result, ability_triggered = get_investigation_result(
+            rules, target_player, game_state
+        )
+
+        # Consume immunity/false-positive only once per night (even with multiple sheriffs)
+        if ability_triggered and investigated_target not in investigated_this_night:
+            investigated_this_night.add(investigated_target)
+            if target_player.role.name == "Godfather":
+                target_player.role.investigation_immunity_used = True
+            elif target_player.role.name == "Miller":
+                target_player.role.false_positive_used = True
+
+        # Record result in sheriff's investigations
+        if sheriff_player and sheriff_player.role:
+            sheriff_player.role.investigations.append((investigated_target, result))
+
+        # Emit result event
+        game_state.add_event("role_action",
+            f"{investigated_target} is {result.upper()}!",
+            [sheriff_name], player=sheriff_name, priority=8,
+            metadata={"target": investigated_target, "result": result})
+
+    # =============================================================================
+    # PHASE 6: Collect pending kills with centralized immunity checks
+    # =============================================================================
     grandma_names = set(p.name for p in game_state.players
                         if p.alive and p.role and p.role.name == "Grandma")
 
-    # Collect all kills BEFORE applying any (truly simultaneous resolution)
+    def is_immune_to_night_kill(target_name: str) -> bool:
+        """Centralized check for night kill immunity (currently only Grandma)."""
+        target = game_state.get_player_by_name(target_name)
+        return target and target.role and target.role.name == "Grandma"
+
     pending_kills = []
     pending_names = set()
+    protected_from_kill = {}  # Maps target -> kill_source for doctor save notifications
 
-    # Track who visits Grandma (for Grandma's kill ability)
-    grandma_visitors = []  # List of (visitor_name, grandma_name)
-    grandmas_who_fired = set()  # Track which grandmas had visitors (fired their shotgun)
+    # Grandma visitors (only count actual visits - blocked players don't visit)
+    grandma_visitors = []
+    grandmas_who_fired = set()
     for visitor, visited in visits.items():
         if visited in grandma_names:
             grandma_visitors.append((visitor, visited))
             grandmas_who_fired.add(visited)
 
-    # Notify each grandma who had a visitor (she fired her shotgun, regardless of outcome)
-    for grandma_name in grandmas_who_fired:
-        game_state.add_event("role_action",
-            "Someone visited you last night. You heard your shotgun go off.",
-            [grandma_name], player=grandma_name, priority=8)
+    if rules.grandma_knows_shotgun_fired:
+        for grandma_name in grandmas_who_fired:
+            game_state.add_event("role_action",
+                "Someone visited you last night. You heard your shotgun go off.",
+                [grandma_name], player=grandma_name, priority=8)
 
-    # Mafia kill - only if the designated killer is not blocked
-    # Grandma is immune to night kills
-    if mafia_target and mafia_target not in effective_protected:
-        if mafia_killer and mafia_killer not in blocked_players:
-            target_player = game_state.get_player_by_name(mafia_target)
-            if target_player and target_player.alive:
-                # Check if target is Grandma (immune to night kills)
-                if target_player.role and target_player.role.name == "Grandma":
-                    pass  # Grandma survives the attack
-                else:
-                    pending_kills.append((mafia_target, "mafia_kill"))
-                    pending_names.add(mafia_target)
+    # Mafia kill
+    if mafia_target and mafia_killer and mafia_killer not in blocked_players:
+        target_player = game_state.get_player_by_name(mafia_target)
+        if target_player and target_player.alive:
+            if mafia_target in effective_protected:
+                protected_from_kill[mafia_target] = "mafia"
+            elif not is_immune_to_night_kill(mafia_target):
+                pending_kills.append(mafia_target)
+                pending_names.add(mafia_target)
 
-    # Vigilante kills - only if vigilante is not blocked
-    # Grandma is immune to night kills
+    # Vigilante kills
     for vig_data in vigilante_kills:
         vig_name = vig_data.get("vigilante")
         vig_target = vig_data.get("target")
-        if vig_name in blocked_players:
-            continue  # Blocked vigilante cannot kill
-        if vig_target and vig_target not in effective_protected and vig_target not in pending_names:
-            target_player = game_state.get_player_by_name(vig_target)
-            if target_player and target_player.alive:
-                # Check if target is Grandma (immune to night kills)
-                if target_player.role and target_player.role.name == "Grandma":
-                    pass  # Grandma survives the attack
-                else:
-                    pending_kills.append((vig_target, "vigilante_kill"))
-                    pending_names.add(vig_target)
+        if not vig_target or vig_name in blocked_players:
+            continue
+        if vig_target in pending_names:
+            continue  # Already being killed
 
-    # Grandma kills visitors (unless they're protected by doctor)
+        target_player = game_state.get_player_by_name(vig_target)
+        if target_player and target_player.alive:
+            if vig_target in effective_protected:
+                protected_from_kill[vig_target] = "vigilante"
+            elif not is_immune_to_night_kill(vig_target):
+                pending_kills.append(vig_target)
+                pending_names.add(vig_target)
+
+    # Grandma kills visitors
     for visitor, grandma_name in grandma_visitors:
-        if visitor not in effective_protected and visitor not in pending_names:
-            visitor_player = game_state.get_player_by_name(visitor)
-            if visitor_player and visitor_player.alive:
-                pending_kills.append((visitor, "grandma_kill"))
+        if visitor in pending_names:
+            continue  # Already being killed
+
+        visitor_player = game_state.get_player_by_name(visitor)
+        if visitor_player and visitor_player.alive:
+            if visitor in effective_protected:
+                protected_from_kill[visitor] = "grandma"
+            elif not is_immune_to_night_kill(visitor):
+                pending_kills.append(visitor)
                 pending_names.add(visitor)
 
-    # Now apply all kills at once
+    # =============================================================================
+    # PHASE 7: Apply all kills simultaneously
+    # =============================================================================
     killed_names = set()
-    for target_name, reason in pending_kills:
+    for target_name in pending_kills:
         target_player = game_state.get_player_by_name(target_name)
         target_player.alive = False
         killed_names.add(target_name)
-        # Public death message is identical for all kill types
-        game_state.add_event("death", f"{target_name} has been found dead, killed during the night!",
-                            "all", metadata={"player": target_name, "reason": reason})
+        # Public death message - no kill reason exposed
+        game_state.add_event("death",
+            f"{target_name} has been found dead, killed during the night!",
+            "all", metadata={"player": target_name})
 
-    # Check if any Executioner's target was killed (not lynched) - convert to fallback role
+    if not pending_kills:
+        game_state.add_event("system", "Nobody was killed last night.", "all")
+
+    # =============================================================================
+    # PHASE 8: Handle executioner conversion if target died
+    # Note: This handles night kills only. Lynch deaths are handled in day.py voting_resolve.
+    # If a death can occur outside both locations, this logic must be moved to a central
+    # death handler (e.g., GameState.kill_player or a post-death hook).
+    # =============================================================================
     if killed_names:
         from ..roles import ROLE_CLASSES
-        rules = getattr(game_state, 'rules', None) or DEFAULT_RULES
         fallback_role_name = rules.executioner_becomes_on_target_death
 
         for p in game_state.players:
             if p.alive and p.role and p.role.name == "Executioner":
                 if p.role.target in killed_names:
-                    # Convert Executioner to fallback role
                     new_role_class = ROLE_CLASSES.get(fallback_role_name)
                     if new_role_class:
                         old_target = p.role.target
@@ -347,8 +436,17 @@ def resolve_night_actions(game_state: GameState):
                             f"Your target {old_target} has died. You are now a {fallback_role_name}.",
                             [p.name], player=p.name, priority=9)
 
-    if not pending_kills:
-        game_state.add_event("system", "Nobody was killed last night.", "all")
+    # =============================================================================
+    # PHASE 9: Notify doctors if they saved someone (optional rule)
+    # Multiple doctors protecting the same target all get notified
+    # =============================================================================
+    if rules.doctor_knows_if_saved and protected_from_kill:
+        for protected_target, kill_source in protected_from_kill.items():
+            doctor_names = doctor_protections.get(protected_target, [])
+            for doctor_name in doctor_names:
+                game_state.add_event("role_action",
+                    "Your protection saved someone's life last night!",
+                    [doctor_name], player=doctor_name, priority=9)
 
 
 # =============================================================================
@@ -363,7 +461,6 @@ def handle_night_start(ctx: StepContext) -> StepResult:
     ctx.game_state.phase_data = {
         "mafia_discussion_messages": [],
         "mafia_votes": [],
-        "protected_players": [],
         "vigilante_kills": [],
     }
 
@@ -820,9 +917,6 @@ def handle_doctor_act(ctx: StepContext) -> StepResult:
 
     if target:
         doctor.role.last_protected = target
-        if "protected_players" not in ctx.phase_data:
-            ctx.phase_data["protected_players"] = []
-        ctx.phase_data["protected_players"].append(target)
         ctx.add_event("role_action", f"Doctor {doctor.name} protects {target}.",
                      doctor_visibility, player=doctor.name, priority=7)
 
@@ -863,7 +957,7 @@ def handle_sheriff_discuss(ctx: StepContext) -> StepResult:
 
 @register_handler("sheriff_act")
 def handle_sheriff_act(ctx: StepContext) -> StepResult:
-    """Sheriff investigates a player. Waits for human input if sheriff is human."""
+    """Sheriff chooses investigation target. Result determined at night_resolve."""
     sheriff_players = [p for p in ctx.get_players_by_role("Sheriff") if p.alive]
     index = ctx.step_index
 
@@ -893,40 +987,16 @@ def handle_sheriff_act(ctx: StepContext) -> StepResult:
         target = execute_role_action(ctx, sheriff, "sheriff")
 
     if target:
-        target_player = ctx.get_player_by_name(target)
-        if target_player:
-            # Use investigation helper that handles Godfather/Miller special cases
-            result, ability_triggered = get_investigation_result(
-                ctx.rules, target_player, ctx.game_state
-            )
+        # Store the investigation target - result will be determined at night_resolve
+        if "sheriff_targets" not in ctx.phase_data:
+            ctx.phase_data["sheriff_targets"] = []
+        ctx.phase_data["sheriff_targets"].append({
+            "sheriff": sheriff.name,
+            "target": target
+        })
 
-            # Track investigations this night for multi-sheriff immunity handling
-            night_key = f"night_{ctx.day_number}_investigated"
-            if night_key not in ctx.phase_data:
-                ctx.phase_data[night_key] = set()
-
-            # Consume immunity/false-positive only once per night (even with multiple sheriffs)
-            if ability_triggered and target not in ctx.phase_data[night_key]:
-                ctx.phase_data[night_key].add(target)
-                if target_player.role.name == "Godfather":
-                    target_player.role.investigation_immunity_used = True
-                elif target_player.role.name == "Miller":
-                    target_player.role.false_positive_used = True
-
-            sheriff.role.investigations.append((target, result))
-
-            ctx.add_event("role_action", f"Sheriff {sheriff.name} investigates {target}.",
-                         sheriff_visibility, player=sheriff.name, priority=7)
-            ctx.add_event("role_action", f"{target} is {result.upper()}!",
-                         sheriff_visibility, player=sheriff.name, priority=8,
-                         metadata={"target": target, "result": result})
-
-            # Only AI sheriff gets post-investigation reaction
-            if not sheriff.is_human:
-                reaction = execute_sheriff_post_investigation(ctx, sheriff, target, result)
-                if reaction:
-                    ctx.add_event("role_action", f"[Sheriff Discussion] {sheriff.name}: {reaction}",
-                                 sheriff_visibility, player=sheriff.name, priority=9)
+        ctx.add_event("role_action", f"Sheriff {sheriff.name} investigates {target} tonight.",
+                     sheriff_visibility, player=sheriff.name, priority=7)
 
     return StepResult(next_step="sheriff_act", next_index=index + 1)
 
@@ -1125,21 +1195,24 @@ def handle_amnesiac_discuss(ctx: StepContext) -> StepResult:
     if index == 0:
         all_amnesiac_names = [p.name for p in amnesiac_players]
         ctx.add_event("system", "Amnesiac night phase begins.", all_amnesiac_names)
+        # Initialize storage for amnesiac discussions
+        if "amnesiac_discussions" not in ctx.phase_data:
+            ctx.phase_data["amnesiac_discussions"] = {}
 
     # Skip discussion for human players
     if not amnesiac.is_human:
         discussion = execute_role_discussion(ctx, amnesiac, "amnesiac")
         ctx.add_event("role_action", f"[Amnesiac Discussion] {amnesiac.name}: {discussion}",
                       amnesiac_visibility, player=amnesiac.name, priority=6)
+        # Store discussion for use in the action phase
+        ctx.phase_data["amnesiac_discussions"][amnesiac.name] = discussion
 
     return StepResult(next_step="amnesiac_discuss", next_index=index + 1)
 
 
 @register_handler("amnesiac_act")
 def handle_amnesiac_act(ctx: StepContext) -> StepResult:
-    """Amnesiac chooses a dead player to remember. Waits for human input if amnesiac is human."""
-    from ..roles import ROLE_CLASSES
-
+    """Amnesiac chooses a dead player to remember. Role change occurs at night_resolve."""
     amnesiac_players = [p for p in ctx.get_players_by_role("Amnesiac")
                         if p.alive and not p.role.has_remembered]
     index = ctx.step_index
@@ -1178,39 +1251,60 @@ def handle_amnesiac_act(ctx: StepContext) -> StepResult:
                 target = None
     else:
         # AI amnesiac selects a dead player
-        target = execute_role_action(ctx, amnesiac, "amnesiac")
-        # Validate target is a dead player
-        if target and target not in dead_names:
-            target = None
+        target = execute_amnesiac_action(ctx, amnesiac, dead_names)
 
     if target:
-        # Find the dead player and their role
-        target_player = ctx.get_player_by_name(target)
-        if target_player and target_player.role:
-            # Create a new instance of their role
-            role_class = ROLE_CLASSES.get(target_player.role.name)
-            if role_class:
-                new_role = role_class()
-                old_role_name = target_player.role.name
+        # Store the remember request - role change will occur at night_resolve
+        if "amnesiac_remembers" not in ctx.phase_data:
+            ctx.phase_data["amnesiac_remembers"] = []
+        ctx.phase_data["amnesiac_remembers"].append({
+            "amnesiac": amnesiac.name,
+            "target": target
+        })
 
-                # Convert amnesiac to the new role
-                amnesiac.convert_to_role(new_role, f"Remembered {target}", ctx.day_number)
-
-                ctx.add_event("role_action",
-                    f"You have remembered {target}'s role. You are now a {old_role_name}!",
-                    amnesiac_visibility, player=amnesiac.name, priority=8)
-
-                # Optionally announce publicly
-                rules = getattr(ctx.game_state, 'rules', None) or DEFAULT_RULES
-                if rules.amnesiac_announce_remember:
-                    ctx.add_event("system",
-                        f"The Amnesiac has remembered who they were!",
-                        "all", priority=9)
+        ctx.add_event("role_action", f"Amnesiac {amnesiac.name} focuses on remembering {target}'s identity.",
+                     amnesiac_visibility, player=amnesiac.name, priority=7)
     else:
         ctx.add_event("role_action", f"Amnesiac {amnesiac.name} chooses not to remember anyone tonight.",
                      amnesiac_visibility, player=amnesiac.name, priority=7)
 
     return StepResult(next_step="amnesiac_act", next_index=index + 1)
+
+
+def execute_amnesiac_action(ctx: StepContext, amnesiac, dead_names: list) -> str:
+    """Execute amnesiac's selection of dead player to remember."""
+    from llm.prompts import build_amnesiac_action_prompt
+    from game.llm_caller import build_target_schema, parse_target
+
+    # Get this amnesiac's discussion from the stored discussions
+    discussions = ctx.phase_data.get("amnesiac_discussions", {})
+    discussion = discussions.get(amnesiac.name, "")
+    prompt = build_amnesiac_action_prompt(ctx.game_state, amnesiac, dead_names, discussion)
+
+    # Build schema with dead players as options (plus ABSTAIN)
+    target_schema = build_target_schema(dead_names, allow_abstain=True)
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = call_llm(
+                amnesiac, ctx.llm_client, [{"role": "user", "content": prompt}],
+                "amnesiac_action", ctx.game_state,
+                response_format={"type": "json_schema", "json_schema": {"name": "amnesiac_action", "schema": target_schema}},
+                temperature=0.7, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
+            )
+
+            target = parse_target(response, allow_abstain=True)
+
+            if target and target not in dead_names:
+                raise ValueError(f"Invalid target: {target} not in dead players")
+
+            return target
+        except Exception as e:
+            logging.warning(f"Amnesiac action attempt {attempt + 1}/{max_retries} failed for {amnesiac.name}: {e}")
+            if attempt == max_retries - 1:
+                logging.error(f"Error executing amnesiac action for {amnesiac.name}: {e}", exc_info=True)
+                return None
 
 
 # =============================================================================
@@ -1219,10 +1313,12 @@ def handle_amnesiac_act(ctx: StepContext) -> StepResult:
 
 def execute_medium_question(ctx: StepContext, medium, dead_names: list) -> tuple:
     """Execute medium's selection of dead player and question."""
-    from llm.prompts import build_role_action_prompt
+    from llm.prompts import build_medium_action_prompt
 
-    alive_names = [p.name for p in ctx.get_alive_players()]
-    prompt = build_role_action_prompt(ctx.game_state, medium, "medium", alive_names, "")
+    # Get this medium's discussion from the stored discussions
+    discussions = ctx.phase_data.get("medium_discussions", {})
+    discussion = discussions.get(medium.name, "")
+    prompt = build_medium_action_prompt(ctx.game_state, medium, dead_names, discussion)
 
     # Custom schema for medium - select target and ask question
     schema = {
@@ -1242,58 +1338,48 @@ def execute_medium_question(ctx: StepContext, medium, dead_names: list) -> tuple
         "additionalProperties": False
     }
 
-    try:
-        response = call_llm(
-            medium, ctx.llm_client, [{"role": "user", "content": prompt}],
-            "medium_action", ctx.game_state,
-            response_format={"type": "json_schema", "json_schema": {"name": "medium_action", "schema": schema}},
-            temperature=0.7, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
-        )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = call_llm(
+                medium, ctx.llm_client, [{"role": "user", "content": prompt}],
+                "medium_action", ctx.game_state,
+                response_format={"type": "json_schema", "json_schema": {"name": "medium_action", "schema": schema}},
+                temperature=0.7, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
+            )
 
-        import json
-        data = json.loads(response)
-        target = data.get("target")
-        question = data.get("question", "")
+            # Extract from structured_output or fallback to parsing content
+            if "structured_output" in response:
+                data = response["structured_output"]
+            else:
+                import json
+                content = response.get("content", "")
+                idx = content.find("{")
+                if idx >= 0:
+                    data = json.loads(content[idx:content.rfind("}")+1])
+                else:
+                    raise ValueError("No JSON found in response content")
 
-        if target == "ABSTAIN" or target not in dead_names:
-            return None, None
+            target = data.get("target")
+            question = data.get("question", "")
 
-        return target, question[:500]  # Limit question length
-    except Exception as e:
-        logging.error(f"Error executing medium action for {medium.name}: {e}", exc_info=True)
-        return None, None
+            if not target or not question:
+                raise ValueError(f"Missing target or question in response: {data}")
+
+            if target == "ABSTAIN" or target not in dead_names:
+                return None, None
+
+            return target, question[:500]  # Limit question length
+        except Exception as e:
+            logging.warning(f"Medium action attempt {attempt + 1}/{max_retries} failed for {medium.name}: {e}")
+            if attempt == max_retries - 1:
+                logging.error(f"Error executing medium action for {medium.name}: {e}", exc_info=True)
+                return None, None
 
 
 def execute_dead_player_response(ctx: StepContext, dead_player, question: str) -> str:
     """Get a dead player's response to the medium's question."""
-    from llm.prompts import ContextBuilder
-
-    # Build context for the dead player
-    builder = ContextBuilder(ctx.game_state)
-    context = builder.build_context(dead_player)
-
-    prompt = f"""{context['game_rules']}
-
-{context['game_log']}
-
-{context['private_info']}
-
-=== SEANCE ===
-
-You are dead, but a Medium is contacting you from beyond the grave.
-They have asked you a YES or NO question.
-
-QUESTION: {question}
-
-You must respond with ONLY one of these three options:
-- "yes" - if you believe the answer is yes
-- "no" - if you believe the answer is no
-- "unknown" - if you don't know or the question cannot be answered with yes/no
-
-Consider what you know from your time alive and any information you gathered.
-Remember your goal was to help your team win, even from beyond the grave.
-
-Respond with just the single word: yes, no, or unknown."""
+    prompt = build_seance_response_prompt(ctx.game_state, dead_player, question)
 
     schema = {
         "type": "object",
@@ -1307,20 +1393,37 @@ Respond with just the single word: yes, no, or unknown."""
         "additionalProperties": False
     }
 
-    try:
-        response = call_llm(
-            dead_player, ctx.llm_client, [{"role": "user", "content": prompt}],
-            "seance_response", ctx.game_state,
-            response_format={"type": "json_schema", "json_schema": {"name": "seance_response", "schema": schema}},
-            temperature=0.3, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
-        )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = call_llm(
+                dead_player, ctx.llm_client, [{"role": "user", "content": prompt}],
+                "seance_response", ctx.game_state,
+                response_format={"type": "json_schema", "json_schema": {"name": "seance_response", "schema": schema}},
+                temperature=0.3, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
+            )
 
-        import json
-        data = json.loads(response)
-        return data.get("answer", "unknown")
-    except Exception as e:
-        logging.error(f"Error getting seance response from {dead_player.name}: {e}", exc_info=True)
-        return "unknown"
+            # Extract from structured_output or fallback to parsing content
+            if "structured_output" in response:
+                data = response["structured_output"]
+            else:
+                import json
+                content = response.get("content", "")
+                idx = content.find("{")
+                if idx >= 0:
+                    data = json.loads(content[idx:content.rfind("}")+1])
+                else:
+                    raise ValueError("No JSON found in response content")
+
+            answer = data.get("answer", "unknown")
+            if answer not in ["yes", "no", "unknown"]:
+                raise ValueError(f"Invalid answer: {answer}")
+            return answer
+        except Exception as e:
+            logging.warning(f"Seance response attempt {attempt + 1}/{max_retries} failed for {dead_player.name}: {e}")
+            if attempt == max_retries - 1:
+                logging.error(f"Error getting seance response from {dead_player.name}: {e}", exc_info=True)
+                return "unknown"
 
 
 @register_handler("medium_discuss")
@@ -1341,19 +1444,24 @@ def handle_medium_discuss(ctx: StepContext) -> StepResult:
     if index == 0:
         all_medium_names = [p.name for p in medium_players]
         ctx.add_event("system", "Medium night phase begins.", all_medium_names)
+        # Initialize storage for medium discussions
+        if "medium_discussions" not in ctx.phase_data:
+            ctx.phase_data["medium_discussions"] = {}
 
     # Skip discussion for human players
     if not medium.is_human:
         discussion = execute_role_discussion(ctx, medium, "medium")
         ctx.add_event("role_action", f"[Medium Discussion] {medium.name}: {discussion}",
                       medium_visibility, player=medium.name, priority=6)
+        # Store discussion for use in the action phase
+        ctx.phase_data["medium_discussions"][medium.name] = discussion
 
     return StepResult(next_step="medium_discuss", next_index=index + 1)
 
 
 @register_handler("medium_act")
 def handle_medium_act(ctx: StepContext) -> StepResult:
-    """Medium contacts a dead player and asks a question."""
+    """Medium chooses a dead player and question. Result determined at night_resolve."""
     medium_players = [p for p in ctx.get_players_by_role("Medium") if p.alive]
     index = ctx.step_index
 
@@ -1401,34 +1509,17 @@ def handle_medium_act(ctx: StepContext) -> StepResult:
         target, question = execute_medium_question(ctx, medium, dead_names)
 
     if target and question:
-        # Get the dead player's response
-        dead_player = ctx.get_player_by_name(target)
+        # Store the seance request - result will be determined at night_resolve
+        if "medium_seances" not in ctx.phase_data:
+            ctx.phase_data["medium_seances"] = []
+        ctx.phase_data["medium_seances"].append({
+            "medium": medium.name,
+            "target": target,
+            "question": question
+        })
 
-        if dead_player:
-            if dead_player.is_human:
-                # Human dead player responds
-                response_input = wait_for_human_input(ctx, "role_action",
-                    {"options": ["yes", "no", "unknown"],
-                     "label": f"Seance question from Medium: {question}"})
-                if response_input and response_input.get("type") == "role_action":
-                    answer = response_input.get("target", "unknown")
-                    if answer not in ["yes", "no", "unknown"]:
-                        answer = "unknown"
-                else:
-                    answer = "unknown"
-            else:
-                # AI dead player responds
-                answer = execute_dead_player_response(ctx, dead_player, question)
-
-            # Record the seance
-            medium.role.seance_history.append((target, question, answer))
-
-            ctx.add_event("role_action",
-                f"Medium {medium.name} contacts {target} and asks: \"{question}\"",
-                medium_visibility, player=medium.name, priority=7)
-            ctx.add_event("role_action",
-                f"The spirit of {target} responds: {answer.upper()}",
-                medium_visibility, player=medium.name, priority=8)
+        ctx.add_event("role_action", f"Medium {medium.name} attempts to contact {target} tonight.",
+                     medium_visibility, player=medium.name, priority=7)
     else:
         ctx.add_event("role_action", f"Medium {medium.name} does not contact anyone tonight.",
                      medium_visibility, player=medium.name, priority=7)
@@ -1440,11 +1531,131 @@ def handle_medium_act(ctx: StepContext) -> StepResult:
 # NIGHT RESOLVE
 # =============================================================================
 
+def resolve_medium_seances(ctx: StepContext, blocked_players: set):
+    """Resolve medium seances after all night actions are submitted.
+
+    Medium seances require LLM calls for dead player responses, so they
+    must be handled in the context-aware resolve step.
+    """
+    medium_seances = ctx.phase_data.get("medium_seances", [])
+
+    for seance_data in medium_seances:
+        medium_name = seance_data["medium"]
+        target = seance_data["target"]
+        question = seance_data["question"]
+        medium_player = ctx.get_player_by_name(medium_name)
+
+        if medium_name in blocked_players:
+            ctx.add_event("role_action",
+                "You were blocked and could not contact the spirits last night.",
+                [medium_name], player=medium_name, priority=8,
+                metadata={"blocked": True})
+            continue
+
+        # Get the dead player's response
+        dead_player = ctx.get_player_by_name(target)
+        if not dead_player:
+            continue
+
+        if dead_player.is_human:
+            # Human dead player responds
+            response_input = wait_for_human_input(ctx, "role_action",
+                {"options": ["yes", "no", "unknown"],
+                 "label": f"Seance question from Medium: {question}"})
+            if response_input and response_input.get("type") == "role_action":
+                answer = response_input.get("target", "unknown")
+                if answer not in ["yes", "no", "unknown"]:
+                    answer = "unknown"
+            else:
+                answer = "unknown"
+        else:
+            # AI dead player responds
+            answer = execute_dead_player_response(ctx, dead_player, question)
+
+        # Record the seance
+        if medium_player and medium_player.role:
+            medium_player.role.seance_history.append((target, question, answer))
+
+        ctx.add_event("role_action",
+            f"You asked {target}: \"{question}\"",
+            [medium_name], player=medium_name, priority=8)
+        ctx.add_event("role_action",
+            f"The spirit of {target} responds: {answer.upper()}",
+            [medium_name], player=medium_name, priority=8)
+
+
+def resolve_amnesiac_remembers(ctx: StepContext, blocked_players: set):
+    """Resolve amnesiac role changes after all night actions are submitted."""
+    from ..roles import ROLE_CLASSES
+
+    amnesiac_remembers = ctx.phase_data.get("amnesiac_remembers", [])
+    rules = getattr(ctx.game_state, 'rules', None) or DEFAULT_RULES
+
+    for remember_data in amnesiac_remembers:
+        amnesiac_name = remember_data["amnesiac"]
+        target = remember_data["target"]
+        amnesiac_player = ctx.get_player_by_name(amnesiac_name)
+
+        if amnesiac_name in blocked_players:
+            ctx.add_event("role_action",
+                "You were blocked and could not remember your identity last night.",
+                [amnesiac_name], player=amnesiac_name, priority=8,
+                metadata={"blocked": True})
+            continue
+
+        # Find the dead player and their role
+        target_player = ctx.get_player_by_name(target)
+        if not target_player or not target_player.role:
+            continue
+
+        # Create a new instance of their role
+        role_class = ROLE_CLASSES.get(target_player.role.name)
+        if role_class and amnesiac_player:
+            new_role = role_class()
+            old_role_name = target_player.role.name
+
+            # Convert amnesiac to the new role
+            amnesiac_player.convert_to_role(new_role, f"Remembered {target}", ctx.day_number)
+
+            ctx.add_event("role_action",
+                f"You have remembered {target}'s role. You are now a {old_role_name}!",
+                [amnesiac_name], player=amnesiac_name, priority=8)
+
+            # Optionally announce publicly
+            if rules.amnesiac_announce_remember:
+                ctx.add_event("system",
+                    f"The Amnesiac has remembered who they were!",
+                    "all", priority=9)
+
+
 @register_handler("night_resolve")
 def handle_night_resolve(ctx: StepContext) -> StepResult:
-    """Resolve all night actions and transition to day."""
+    """Resolve all night actions and transition to day.
+
+    Night resolution order:
+    1. Compute blocked players (escorts are immune to blocks)
+    2. Resolve medium seances (requires LLM calls for dead player responses)
+    3. Resolve amnesiac remembering (role conversions)
+    4. Call resolve_night_actions for tracker/sheriff results and kills
+    """
     from ..win_conditions import check_win_conditions
 
+    # Compute blocked players (same logic as in resolve_night_actions)
+    # Needed here for medium/amnesiac resolution which requires ctx for LLM calls
+    blocked_players = set(ctx.phase_data.get("blocked_players", []))
+
+    # Remove escorts from blocked set - they are immune to roleblocks
+    for p in ctx.game_state.players:
+        if p.role and p.role.name == "Escort" and p.name in blocked_players:
+            blocked_players.discard(p.name)
+
+    # Resolve medium seances (requires LLM calls)
+    resolve_medium_seances(ctx, blocked_players)
+
+    # Resolve amnesiac remembering
+    resolve_amnesiac_remembers(ctx, blocked_players)
+
+    # Resolve everything else (tracker, sheriff, kills, etc.)
     resolve_night_actions(ctx.game_state)
     ctx.add_event("phase_change", f"Night {ctx.day_number} ends.")
 

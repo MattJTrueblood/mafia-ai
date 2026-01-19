@@ -2,6 +2,7 @@
 
 You are {{ player_name }}, the DOCTOR (TOWN faction).
 You can protect one player each night from being killed.
+{% if rules.doctor_can_self_protect %}You CAN protect yourself.{% else %}You CANNOT protect yourself.{% endif %}
 
 {% if last_protected %}
 You cannot protect {{ last_protected }} again (protected last night).

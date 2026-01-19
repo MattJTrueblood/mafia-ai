@@ -4,8 +4,9 @@ You are {{ player_name }}, the VIGILANTE (TOWN faction).
 {% if bullet_used %}
 Bullet status: USED (you have no more kills).
 {% else %}
-Bullet status: AVAILABLE (one kill remaining).
+Bullet status: {{ bullets_remaining }} bullet{{ 's' if bullets_remaining > 1 else '' }} remaining.
 {% endif %}
+{% if rules.vigilante_can_abstain %}You may choose not to shoot on any given night.{% else %}You must shoot if you have bullets remaining.{% endif %}
 
 {% include 'partials/private_info/scratchpad.jinja2' %}
 

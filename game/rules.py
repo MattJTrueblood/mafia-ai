@@ -25,6 +25,7 @@ class GameRules:
     # Doctor rules
     doctor_can_protect_same_twice: bool = False  # Cannot protect same player two nights in a row
     doctor_can_self_protect: bool = True         # Can protect themselves
+    doctor_knows_if_saved: bool = False          # Doctor gets notified if they saved someone from death
 
     # Vigilante rules
     vigilante_can_abstain: bool = True   # Can choose not to shoot
@@ -53,6 +54,9 @@ class GameRules:
 
     # Amnesiac rules
     amnesiac_announce_remember: bool = False  # Publicly announce when amnesiac remembers a role
+
+    # Grandma rules
+    grandma_knows_shotgun_fired: bool = True  # Grandma is notified when someone visits and shotgun fires
 
     # Mafia rules
     mafia_select_killer: bool = True  # Mafia explicitly selects who performs the kill (affects tracking/blocking)

@@ -158,9 +158,18 @@
             height: 14px;
             margin-left: 8px;
         }
-        .rule-item input[type="number"],
-        .rule-item select {
+        .rule-item input[type="number"] {
             width: 60px;
+            padding: 3px 5px;
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+        }
+        .rule-item select {
+            width: 80px;
             padding: 3px 5px;
             text-align: center;
             background: rgba(0,0,0,0.3);
@@ -343,6 +352,10 @@
                             <label>Self-protect allowed</label>
                             <input type="checkbox" id="rule-doctor-self-protect" checked>
                         </div>
+                        <div class="rule-item">
+                            <label>Notified when save is successful</label>
+                            <input type="checkbox" id="rule-doctor-knows-saved">
+                        </div>
                     </div>
                     <div class="rule-group">
                         <h4>Vigilante</h4>
@@ -395,6 +408,13 @@
                         <div class="rule-item">
                             <label>Public message when amnesiac remembers role</label>
                             <input type="checkbox" id="rule-amnesiac-announce">
+                        </div>
+                    </div>
+                    <div class="rule-group">
+                        <h4>Grandma</h4>
+                        <div class="rule-item">
+                            <label>Knows when shotgun fires</label>
+                            <input type="checkbox" id="rule-grandma-knows-fired" checked>
                         </div>
                     </div>
                     <div class="rule-group">
@@ -534,6 +554,7 @@
                 day1_no_lynch: document.getElementById('rule-day1-no-lynch').checked,
                 doctor_can_protect_same_twice: document.getElementById('rule-doctor-same-twice').checked,
                 doctor_can_self_protect: document.getElementById('rule-doctor-self-protect').checked,
+                doctor_knows_if_saved: document.getElementById('rule-doctor-knows-saved').checked,
                 vigilante_can_abstain: document.getElementById('rule-vigilante-abstain').checked,
                 vigilante_bullets: parseInt(document.getElementById('rule-vigilante-bullets').value) || 1,
                 mafia_select_killer: document.getElementById('rule-mafia-select-killer').checked,
@@ -542,6 +563,7 @@
                 miller_single_use_false_positive: document.getElementById('rule-miller-single-use').checked,
                 executioner_becomes_on_target_death: document.getElementById('rule-executioner-becomes').value || 'Jester',
                 amnesiac_announce_remember: document.getElementById('rule-amnesiac-announce').checked,
+                grandma_knows_shotgun_fired: document.getElementById('rule-grandma-knows-fired').checked,
                 require_majority_to_lynch: document.getElementById('rule-require-majority').checked,
                 allow_no_lynch: document.getElementById('rule-allow-no-lynch').checked,
                 max_discussion_messages: parseInt(document.getElementById('rule-max-discussion').value) || 10

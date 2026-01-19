@@ -85,9 +85,11 @@ class ContextBuilder:
 
     def _build_role_context(self, player):
         """Build context dict for role-specific template rendering."""
+        rules = getattr(self.game_state, 'rules', None) or DEFAULT_RULES
         context = {
             'player_name': player.name,
-            'scratchpad_entries': self._get_scratchpad_entries(player)
+            'scratchpad_entries': self._get_scratchpad_entries(player),
+            'rules': rules  # Make rules available to all private_info templates
         }
 
         role = player.role
@@ -123,6 +125,7 @@ class ContextBuilder:
 
         elif role_name == "Vigilante":
             context['bullet_used'] = getattr(role, 'bullet_used', False)
+            context['bullets_remaining'] = 0 if context['bullet_used'] else rules.vigilante_bullets
 
         elif role_name == "Mason":
             mason_players = self.game_state.get_players_by_role("Mason")

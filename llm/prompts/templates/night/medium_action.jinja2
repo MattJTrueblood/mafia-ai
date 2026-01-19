@@ -1,0 +1,28 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== MEDIUM ACTION ===
+
+{% if previous_discussion %}
+YOUR PREVIOUS REASONING:
+{{ previous_discussion }}
+
+{% endif %}
+Tonight you may conduct a seance to contact a dead player and ask them one YES/NO question.
+
+Dead players you can contact: {{ dead_players | join(', ') }}
+
+You may also choose to ABSTAIN and not contact anyone.
+
+IMPORTANT INSTRUCTIONS:
+1. Choose ONE dead player to contact (or ABSTAIN)
+2. Formulate a clear YES/NO question that the dead player can answer with "yes", "no", or "unknown"
+3. Good questions are specific and answerable: "Was [player] mafia?", "Did [player] visit you the night you died?", "Is [player] the Sheriff?"
+4. Avoid vague or compound questions that cannot be answered with a simple yes/no
+
+Remember: Dead mafia members may lie to protect their team. Dead town members will try to help you.
+
+Who will you contact, and what will you ask them?
