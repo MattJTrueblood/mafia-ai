@@ -147,6 +147,107 @@ def wait_for_human_input(ctx: Any, input_type: str, context: dict = None) -> Opt
     return human_input
 
 
+def generate_vote_summary(game_state: Any, day_number: int) -> str:
+    """
+    Generate a structured vote summary for a day (no LLM needed).
+
+    Parses vote events and formats them as a concise summary showing
+    who voted whom and the outcome.
+
+    Args:
+        game_state: GameState object with events
+        day_number: The day number to summarize votes for
+
+    Returns:
+        Formatted vote summary string
+    """
+    # Find vote events for this day
+    vote_events = []
+    death_event = None
+    role_reveal = None
+
+    for event in game_state.events:
+        if event.get("day") != day_number or event.get("phase") != "day":
+            continue
+
+        event_type = event.get("type")
+        if event_type == "vote":
+            metadata = event.get("metadata", {})
+            voter = event.get("player")
+            target = metadata.get("target", "abstain")
+            if voter:
+                vote_events.append({"voter": voter, "target": target})
+
+        elif event_type == "death":
+            metadata = event.get("metadata", {})
+            death_event = metadata.get("player")
+
+        elif event_type == "system":
+            message = event.get("message", "")
+            # Check for role reveal (e.g., "Alice was MAFIA.")
+            if " was MAFIA" in message or " was TOWN" in message:
+                role_reveal = message
+
+    if not vote_events:
+        return "No votes cast."
+
+    # Group votes by target
+    votes_by_target = {}
+    for v in vote_events:
+        target = v["target"]
+        if target not in votes_by_target:
+            votes_by_target[target] = []
+        votes_by_target[target].append(v["voter"])
+
+    # Build summary lines
+    lines = []
+    for target, voters in sorted(votes_by_target.items(), key=lambda x: -len(x[1])):
+        if target == "abstain":
+            lines.append(f"{', '.join(voters)} abstained")
+        else:
+            lines.append(f"{', '.join(voters)} voted {target}")
+
+    # Add outcome
+    if death_event:
+        lines.append(f"{death_event} was lynched")
+        if role_reveal:
+            # Extract just the role part
+            lines.append(role_reveal)
+    else:
+        lines.append("No one was lynched")
+
+    return "\n".join(lines)
+
+
+def generate_night_summary(game_state: Any, day_number: int, player: Any) -> str:
+    """
+    Generate a summary of night events visible to a specific player.
+
+    Args:
+        game_state: GameState object with events
+        day_number: The day number (night N-1 events belong to day N-1's summary)
+        player: The player to generate the summary for
+
+    Returns:
+        Formatted night summary string, or empty string if no visible events
+    """
+    from llm.prompts import get_visible_events, format_event_for_prompt
+
+    visible_events = get_visible_events(game_state, player)
+
+    # Filter to night events for this day
+    night_events = []
+    for event in visible_events:
+        if event.get("day") == day_number and event.get("phase") == "night":
+            formatted = format_event_for_prompt(event)
+            night_events.append(formatted)
+
+    if not night_events:
+        return ""
+
+    return "Night events:\n" + "\n".join(f"- {e}" for e in night_events)
+
+
 def execute_group_discussion(
     ctx: Any,
     player: Any,

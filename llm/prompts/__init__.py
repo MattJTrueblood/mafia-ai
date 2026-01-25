@@ -607,3 +607,68 @@ def build_seance_response_prompt(game_state, player, question: str) -> str:
         question=question
     )
     return get_template_manager().render('night/seance_response.jinja2', context)
+
+
+def build_day_summary_prompt(game_state, player, day_number: int) -> str:
+    """Build prompt for generating a player's summary of a day.
+
+    Used for context pruning - each player generates their own summary
+    based on events they could see during that day.
+
+    Args:
+        game_state: Current game state
+        player: The player generating the summary
+        day_number: The day number to summarize
+
+    Returns:
+        Prompt string
+    """
+    # Get events visible to this player for the specified day
+    visible_events = get_visible_events(game_state, player)
+
+    # Filter to only events from the specified day during day phase
+    day_events = []
+    for event in visible_events:
+        if event.get("day") == day_number and event.get("phase") == "day":
+            # Format the event for display
+            formatted = format_event_for_prompt(event)
+            day_events.append(formatted)
+
+    context = {
+        'day_number': day_number,
+        'player_name': player.name,
+        'role_name': player.role.name if player.role else "Unknown",
+        'day_events': day_events
+    }
+
+    return get_template_manager().render('day/summarize.jinja2', context)
+
+
+def build_consigliere_convert_prompt(game_state, player) -> str:
+    """Build prompt for Consigliere's conversion decision.
+
+    Args:
+        game_state: Current game state
+        player: The Consigliere player
+
+    Returns:
+        Prompt string
+    """
+    builder = ContextBuilder(game_state)
+
+    # Get mafia members list
+    mafia_players = game_state.get_players_by_role("Mafia")
+    godfather_players = game_state.get_players_by_role("Godfather")
+    consort_players = game_state.get_players_by_role("Consort")
+    alive_mafia = [p.name for p in mafia_players + godfather_players + consort_players if p.alive]
+
+    # Count sheriffs
+    sheriffs = [p for p in game_state.get_players_by_role("Sheriff") if p.alive]
+
+    context = builder.build_context(
+        player=player,
+        phase='consigliere_convert',
+        alive_mafia=alive_mafia,
+        sheriff_count=len(sheriffs)
+    )
+    return get_template_manager().render('night/consigliere_convert.jinja2', context)

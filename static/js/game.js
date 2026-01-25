@@ -256,9 +256,12 @@ function updatePlayers(players) {
         // Add "(You)" indicator for human player
         const youIndicator = isOwnCard ? '<span class="you-indicator">(You)</span>' : '';
 
+        // Use display_name if available (includes target info for Executioner, etc.)
+        const displayName = player.display_name || player.name;
+
         card.className = className;
         card.innerHTML = `
-            <span class="player-name">${escapeHtml(player.name)}</span>
+            <span class="player-name">${escapeHtml(displayName)}</span>
             ${youIndicator}
             ${indicatorHtml}
             <span class="player-role">${escapeHtml(roleDisplay)}</span>

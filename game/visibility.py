@@ -106,10 +106,11 @@ class VisibilityManager:
         Initialize standard groups based on player roles.
 
         Currently creates:
-        - "mafia" group from all mafia team members
+        - "mafia" group from all mafia team members (Mafia, Godfather, Consort, Consigliere)
         - "masons" group from Mason role players
         """
-        # Create mafia group
+        # Create mafia group - includes all mafia-aligned roles
+        # All mafia know each other's identities (including undercover Consigliere)
         mafia_group = self.get_or_create_group("mafia", team="mafia")
         for player in players:
             if player.team == "mafia":
@@ -154,6 +155,8 @@ def get_mafia_visibility(game_state) -> List[str]:
 
     This is a bridge function for existing code.
     Uses VisibilityManager if available, falls back to direct lookup.
+
+    Includes all mafia team members: Mafia, Godfather, Consort, and Consigliere.
     """
     if hasattr(game_state, 'visibility_manager'):
         return game_state.visibility_manager.get_visibility_for_group("mafia")
@@ -161,7 +164,7 @@ def get_mafia_visibility(game_state) -> List[str]:
     # Fallback for backwards compatibility
     return [
         p.name for p in game_state.players
-        if p.role and p.role.name in ("Mafia", "Godfather")
+        if p.role and p.role.name in ("Mafia", "Godfather", "Consort", "Consigliere")
     ]
 
 

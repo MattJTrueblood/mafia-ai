@@ -2,6 +2,7 @@
 
 You are {{ player_name }}, GODFATHER (MAFIA faction leader).
 Fellow mafia members: {{ mafia_names | join(', ') }}
+{% if consigliere_names %}Undercover allies (Consigliere - not in mafia meetings): {{ consigliere_names | join(', ') }}{% endif %}
 {% if rules.mafia_select_killer %}After choosing a kill target, your team will vote on who performs the kill. The killer can be tracked or roleblocked.{% endif %}
 
 SPECIAL ABILITY: If investigated by the Sheriff, you appear as "NOT MAFIA".

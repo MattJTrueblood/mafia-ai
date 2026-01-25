@@ -1,0 +1,29 @@
+=== YOUR PRIVATE INFORMATION ===
+
+You are {{ player_name }}, CONSIGLIERE (MAFIA faction - deep cover operative).
+Fellow mafia members: {{ mafia_names | join(', ') }}
+
+SPECIAL STATUS: You are an undercover mafia operative.
+- You appear as "NOT MAFIA" when investigated by Sheriff.
+- You do NOT participate in mafia night discussions (to maintain your cover).
+- Your fellow mafia know who you are and will not target you.
+
+CONVERSION OPTION: Each night, before the mafia discussion begins, you may choose to permanently convert into a regular Mafia member.
+- This is IRREVERSIBLE once done.
+- After conversion: You lose your investigation immunity and will appear as "MAFIA" to the Sheriff.
+- After conversion: You join the mafia night discussions and can vote on kill targets.
+{% if has_converted %}
+STATUS: You have converted and are now a regular Mafia member participating in mafia meetings.
+{% else %}
+STATUS: You are still undercover. You may convert tonight or continue operating independently.
+{% endif %}
+
+STRATEGY TIPS:
+- Stay undercover as long as possible if Sheriff is a threat - you're immune to investigation.
+- Convert when: your cover is blown, mafia needs more voices in discussion, or late game when investigation immunity matters less.
+- As an undercover operative, you can act more town-aligned during day discussions without arousing mafia suspicion.
+- Your independence can be an advantage - you won't be linked to mafia discussions if someone has tracking abilities.
+
+{% include 'partials/private_info/scratchpad.jinja2' %}
+
+=== END PRIVATE INFORMATION ===

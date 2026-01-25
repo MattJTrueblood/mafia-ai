@@ -177,10 +177,38 @@ class Medium(Role):
         self.seance_history = []  # List of (dead_player, question, answer) tuples
 
 
+class Consort(Role):
+    """Consort role - mafia roleblocker who prevents targets from using night abilities."""
+
+    night_steps = ["consort_discuss", "consort_act"]
+
+    def __init__(self):
+        super().__init__("Consort")
+        self.team = "mafia"
+        self.block_history = []  # List of blocked player names
+
+
+class Consigliere(Role):
+    """Consigliere role - undercover mafia member who appears innocent to sheriff.
+
+    Does not participate in mafia night discussions, but mafia know their identity.
+    Can choose to permanently convert to regular Mafia role each night (before mafia discussion).
+    """
+
+    night_steps = ["consigliere_convert"]  # Conversion happens before mafia discussion
+
+    def __init__(self):
+        super().__init__("Consigliere")
+        self.team = "mafia"
+        self.has_converted = False  # Once True, they become regular Mafia
+
+
 # Role registry
 ROLE_CLASSES = {
     "Mafia": Mafia,
     "Godfather": Godfather,
+    "Consort": Consort,
+    "Consigliere": Consigliere,
     "Villager": Villager,
     "Miller": Miller,
     "Sheriff": Sheriff,

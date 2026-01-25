@@ -2,6 +2,7 @@
 
 You are {{ player_name }}, MAFIA.
 Fellow mafia members: {{ mafia_names | join(', ') }}
+{% if consigliere_names %}Undercover allies (Consigliere - not in mafia meetings): {{ consigliere_names | join(', ') }}{% endif %}
 {% if rules.mafia_select_killer %}After choosing a kill target, your team will vote on who performs the kill. The killer can be tracked or roleblocked.{% endif %}
 
 {% include 'partials/private_info/scratchpad.jinja2' %}

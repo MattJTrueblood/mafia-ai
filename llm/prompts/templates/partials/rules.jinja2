@@ -18,6 +18,12 @@ ROLES:
 - Godfather (MAFIA): Mafia leader who appears as "NOT MAFIA" when investigated by Sheriff.{% if rules.godfather_requires_other_mafia %} Immunity only active when other mafia are alive.{% endif %}{% if rules.godfather_single_use_immunity %} Immunity is consumed after first investigation.{% endif %}
 
 {% endif %}
+{%- if 'Consort' in roles_in_game -%}
+- Consort (MAFIA): Mafia roleblocker. Each night, choose a player to roleblock. That player's night action is prevented. Immune to roleblocks.
+{% endif %}
+{%- if 'Consigliere' in roles_in_game -%}
+- Consigliere (MAFIA): Undercover mafia operative who appears as "NOT MAFIA" when investigated by Sheriff. Does not participate in mafia night discussions (maintains cover). Each night may permanently convert to regular Mafia (losing investigation immunity but joining discussions).
+{% endif %}
 {%- if 'Villager' in roles_in_game -%}
 - Villager: Regular town member, no special abilities.
 {% endif %}
@@ -79,7 +85,7 @@ WIN CONDITIONS:
 {% endif %}
 
 PHASES:
-- Night: Mafia votes on kill{% if 'Doctor' in roles_in_game %}, Doctor protects{% endif %}{% if 'Sheriff' in roles_in_game %}, Sheriff investigates{% endif %}{% if 'Vigilante' in roles_in_game %}, Vigilante may kill{% endif %}{% if 'Tracker' in roles_in_game %}, Tracker tracks{% endif %}{% if 'Escort' in roles_in_game %}, Escort roleblocks{% endif %}{% if 'Medium' in roles_in_game %}, Medium communes with dead{% endif %}{% if 'Amnesiac' in roles_in_game %}, Amnesiac may remember{% endif %}. All actions resolve simultaneously.
+- Night: Mafia votes on kill{% if 'Doctor' in roles_in_game %}, Doctor protects{% endif %}{% if 'Sheriff' in roles_in_game %}, Sheriff investigates{% endif %}{% if 'Vigilante' in roles_in_game %}, Vigilante may kill{% endif %}{% if 'Tracker' in roles_in_game %}, Tracker tracks{% endif %}{% if 'Escort' in roles_in_game %}, Escort roleblocks{% endif %}{% if 'Consort' in roles_in_game %}, Consort roleblocks{% endif %}{% if 'Medium' in roles_in_game %}, Medium communes with dead{% endif %}{% if 'Amnesiac' in roles_in_game %}, Amnesiac may remember{% endif %}. All actions resolve simultaneously.
 - Day: Players discuss, then vote to lynch.{% if rules.require_majority_to_lynch %} Absolute majority required to lynch.{% endif %}{% if rules.allow_no_lynch %} Ties or no majority = no lynch.{% endif %}{% if rules.day1_no_lynch %} Day 1 has no lynch vote (introduction only).{% endif %}
 
 

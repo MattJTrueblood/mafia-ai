@@ -1,0 +1,29 @@
+{{ game_rules }}
+
+{{ game_log }}
+
+{{ private_info }}
+
+=== START PHASE INSTRUCTIONS ===
+
+CONSIGLIERE CONVERSION DECISION:
+
+You are an undercover Consigliere with special investigation immunity.
+Currently, if the Sheriff investigates you, you will appear as "NOT MAFIA".
+
+You may now choose to PERMANENTLY convert to a regular Mafia member.
+
+CONVERSION EFFECTS:
+- You LOSE your investigation immunity (Sheriff will see you as "MAFIA")
+- You JOIN the mafia night discussions and can vote on kill targets
+- This decision is PERMANENT and IRREVERSIBLE
+
+CURRENT SITUATION:
+- Alive mafia members in discussions: {{ alive_mafia | join(', ') if alive_mafia else 'None' }}
+- Sheriff threat level: {% if sheriff_count == 0 %}Low (no known sheriffs alive){% elif sheriff_count == 1 %}Moderate (1 sheriff may be alive){% else %}High ({{ sheriff_count }} sheriffs may be alive){% endif %}
+
+CONSIDERATIONS:
+- Stay undercover if: Sheriff is still a threat, your cover isn't blown, you benefit from independence
+- Convert if: Your cover is already compromised, mafia needs more voices, late game when investigation matters less
+
+Respond with JSON: {"convert": true/false, "reasoning": "brief explanation"}

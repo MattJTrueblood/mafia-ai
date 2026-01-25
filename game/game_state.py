@@ -162,6 +162,10 @@ class GameState:
         self.human_interrupt_requested = False  # True when human wants to speak in day discussion
         self.end_trashtalk_requested = False  # True when human wants to end postgame trashtalk
 
+        # Context pruning: per-player day summaries
+        # Structure: {day_number: {player_name: {discussion_summary, vote_summary, night_summary}}}
+        self.day_summaries = {}
+
         # Create player objects
         for player_data in players:
             is_human = human_player_name and player_data["name"] == human_player_name
@@ -216,8 +220,9 @@ class GameState:
             for _ in range(count):
                 roles_to_assign.append(ROLE_CLASSES[role_name]())
 
-        has_mafia = any(isinstance(r, ROLE_CLASSES["Mafia"]) for r in roles_to_assign)
-        if not has_mafia and len(roles_to_assign) > 0:
+        # Check if any mafia-team role exists (Mafia, Godfather, Consort, Consigliere, etc.)
+        has_mafia_team = any(r.team == "mafia" for r in roles_to_assign)
+        if not has_mafia_team and len(roles_to_assign) > 0:
             roles_to_assign[0] = ROLE_CLASSES["Mafia"]()
 
         # Handle forced role for human player
@@ -243,6 +248,23 @@ class GameState:
             else:
                 player.role = ROLE_CLASSES["Villager"]()
                 player.team = "town"
+
+        # Assign targets to Executioners (must be a town player)
+        self._assign_executioner_targets()
+
+    def _assign_executioner_targets(self):
+        """Assign random town player targets to any Executioners."""
+        # Find all town players (potential targets)
+        town_players = [p for p in self.players if p.team == "town"]
+        if not town_players:
+            return
+
+        # Find all Executioners and assign targets
+        for player in self.players:
+            if player.role and player.role.name == "Executioner":
+                # Pick a random town player as target
+                target = random.choice(town_players)
+                player.role.target = target.name
 
     def get_alive_players(self) -> List[Player]:
         """Get list of alive players."""
@@ -278,6 +300,48 @@ class GameState:
         if human and not human.alive:
             return True
         return False
+
+    # Day summary methods for context pruning
+    def add_player_day_summary(self, day_number: int, player_name: str,
+                                discussion_summary: str = None,
+                                vote_summary: str = None,
+                                night_summary: str = None):
+        """Add or update a player's summary for a specific day.
+
+        Args:
+            day_number: The day number being summarized
+            player_name: The player this summary belongs to
+            discussion_summary: LLM-generated summary of day's discussion
+            vote_summary: Structured vote result summary
+            night_summary: Summary of night events visible to this player
+        """
+        if day_number not in self.day_summaries:
+            self.day_summaries[day_number] = {}
+
+        if player_name not in self.day_summaries[day_number]:
+            self.day_summaries[day_number][player_name] = {}
+
+        summary = self.day_summaries[day_number][player_name]
+        if discussion_summary is not None:
+            summary["discussion_summary"] = discussion_summary
+        if vote_summary is not None:
+            summary["vote_summary"] = vote_summary
+        if night_summary is not None:
+            summary["night_summary"] = night_summary
+
+    def get_player_day_summary(self, day_number: int, player_name: str) -> Optional[Dict]:
+        """Get a player's summary for a specific day.
+
+        Returns:
+            Dict with discussion_summary, vote_summary, night_summary keys, or None
+        """
+        if day_number in self.day_summaries:
+            return self.day_summaries[day_number].get(player_name)
+        return None
+
+    def is_day_summarized(self, day_number: int) -> bool:
+        """Check if a day has been summarized (has any player summaries)."""
+        return day_number in self.day_summaries and len(self.day_summaries[day_number]) > 0
 
     def has_human_player(self) -> bool:
         """Check if this game has a human player."""
@@ -409,6 +473,17 @@ class GameState:
                 player_dict["role"] = p.role.name if p.role else None
                 player_dict["team"] = p.team
 
+            # Add display_name with target info for Executioner (when role is visible)
+            role_visible = player_dict["role"] not in (None, "???")
+            if role_visible and p.role and p.role.name == "Executioner":
+                target = getattr(p.role, 'target', None)
+                if target:
+                    player_dict["display_name"] = f"{p.name} (Exe→{target})"
+                else:
+                    player_dict["display_name"] = p.name
+            else:
+                player_dict["display_name"] = p.name
+
             players_data.append(player_dict)
 
         # Filter events based on visibility
@@ -434,6 +509,8 @@ class GameState:
             "human_input_context": self.human_input_context,
             "reveal_all": self.reveal_all,
             "human_interrupt_requested": self.human_interrupt_requested,
+            # Context pruning state
+            "day_summaries": self.day_summaries,
         }
 
     def _filter_events_for_human(self, human_player: Player) -> List[Dict]:

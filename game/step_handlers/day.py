@@ -23,12 +23,15 @@ from ..utils import (
     execute_scratchpad_writing,
     select_speaker_by_recency,
     wait_for_human_input,
+    generate_vote_summary,
+    generate_night_summary,
 )
 from llm.prompts import (
     build_day_discussion_prompt,
     build_turn_poll_prompt,
     build_day_voting_prompt,
     build_introduction_prompt,
+    build_day_summary_prompt,
 )
 from llm.openrouter_client import LLMCancelledException
 
@@ -171,6 +174,8 @@ def poll_for_turn_actions(ctx: StepContext, exclude_player: str) -> tuple:
 
 def resolve_voting(game_state: GameState):
     """Resolve voting and apply lynch. Requires MAJORITY to lynch."""
+    from ..win_conditions import record_lynch
+
     votes = game_state.phase_data.get("votes", [])
     vote_counts = {}
 
@@ -196,6 +201,10 @@ def resolve_voting(game_state: GameState):
     if lynch_target:
         target_player = game_state.get_player_by_name(lynch_target)
         game_state.kill_player(lynch_target, f"Lynched by vote ({lynch_votes} votes).")
+
+        # Record the lynch for Executioner win condition
+        record_lynch(game_state, lynch_target)
+
         if target_player:
             # Check for Jester win - sets winner, postgame handles the rest
             if (target_player.role.name == "Jester"):
@@ -205,9 +214,25 @@ def resolve_voting(game_state: GameState):
             else:
                 role_flip = "MAFIA" if target_player.team == "mafia" else "TOWN"
                 game_state.add_event("system", f"{lynch_target} was {role_flip}.", "all")
+
+            # Check for Executioner win - their target was lynched
+            _check_executioner_wins(game_state, lynch_target)
     else:
         game_state.add_event("vote_result",
             "Nobody died, as no player received a majority of votes.", "all")
+
+
+def _check_executioner_wins(game_state: GameState, lynched_name: str):
+    """Check if any Executioner has won by getting their target lynched."""
+    for player in game_state.players:
+        if player.role and player.role.name == "Executioner":
+            target = getattr(player.role, 'target', None)
+            if target == lynched_name:
+                # Mark as having won
+                player.role.has_won = True
+                game_state.add_event("system",
+                    f"{player.name} (EXECUTIONER) wins! Their target {lynched_name} was lynched.",
+                    "all")
 
 
 # =============================================================================
@@ -222,6 +247,20 @@ def handle_day_start(ctx: StepContext) -> StepResult:
     alive = ctx.get_alive_players()
     names = ", ".join([p.name for p in alive])
     ctx.add_event("system", f"Remaining players ({len(alive)}): {names}")
+
+    # Add night summaries to previous day when context pruning is enabled
+    if ctx.rules.enable_context_pruning and ctx.day_number > 1:
+        previous_day = ctx.day_number - 1
+        if ctx.game_state.is_day_summarized(previous_day):
+            # Add night events to each player's summary
+            for player in ctx.game_state.players:
+                night_summary = generate_night_summary(ctx.game_state, previous_day, player)
+                if night_summary:
+                    ctx.game_state.add_player_day_summary(
+                        day_number=previous_day,
+                        player_name=player.name,
+                        night_summary=night_summary
+                    )
 
     if is_round_robin_day(ctx.rules, ctx.day_number):
         ctx.add_event("system", "Introduction phase begins. Each player will introduce themselves.")
@@ -267,6 +306,9 @@ def handle_introduction_message(ctx: StepContext) -> StepResult:
             ctx.emit_status("turn_polling", waiting_player=None)
         # Check if this day has voting
         if is_no_lynch_day(ctx.rules, ctx.day_number):
+            # Check if we should run day_summarize step
+            if ctx.rules.enable_context_pruning:
+                return StepResult(next_step="day_summarize", next_index=0)
             ctx.game_state.start_night_phase()
             return StepResult(next_step="night_start", next_index=0)
         return StepResult(next_step="scratchpad_pre_vote", next_index=0)
@@ -634,6 +676,79 @@ def handle_voting_resolve(ctx: StepContext) -> StepResult:
         ctx.game_state.winner = winner
         ctx.game_state.start_postgame_phase()
         return StepResult(next_step="postgame_reveal", next_index=0)
+
+    # Check if we should run day_summarize step
+    if ctx.rules.enable_context_pruning:
+        return StepResult(next_step="day_summarize", next_index=0)
+
+    ctx.game_state.start_night_phase()
+    return StepResult(next_step="night_start", next_index=0)
+
+
+# =============================================================================
+# DAY SUMMARIZE HANDLER (Context Pruning)
+# =============================================================================
+
+@register_handler("day_summarize")
+def handle_day_summarize(ctx: StepContext) -> StepResult:
+    """Generate per-player summaries of the day for context pruning.
+
+    This step runs after voting_resolve when context pruning is enabled.
+    Each AI player generates their own summary of the day based on what
+    they could see. Vote summaries are generated without LLM calls.
+    """
+    day_number = ctx.day_number
+
+    # Only AI players generate summaries
+    ai_players = [p for p in ctx.get_alive_players() if not p.is_human]
+
+    if not ai_players:
+        ctx.game_state.start_night_phase()
+        return StepResult(next_step="night_start", next_index=0)
+
+    # Generate vote summary (same for all players, no LLM needed)
+    vote_summary = generate_vote_summary(ctx.game_state, day_number)
+
+    def summarize_func(player):
+        """Generate discussion summary for a single player."""
+        prompt = build_day_summary_prompt(ctx.game_state, player, day_number)
+        messages = [{"role": "user", "content": prompt}]
+
+        response = call_llm(
+            player, ctx.llm_client, messages, "day_summarize", ctx.game_state,
+            temperature=0.5, cancel_event=ctx.cancel_event,
+            emit_player_status=ctx.emit_player_status
+        )
+
+        discussion_summary = parse_text(response, player.name)
+        return {"player": player.name, "discussion_summary": discussion_summary}
+
+    # Run summary generation in parallel for all AI players
+    results = execute_parallel(ai_players, summarize_func, ctx)
+
+    # Store summaries in game state
+    for result in results:
+        player_name = result["player"]
+        discussion_summary = result.get("discussion_summary", "")
+
+        ctx.game_state.add_player_day_summary(
+            day_number=day_number,
+            player_name=player_name,
+            discussion_summary=discussion_summary,
+            vote_summary=vote_summary
+        )
+
+    # Also add summaries for human player if present (using vote summary only)
+    human_player = ctx.game_state.get_human_player()
+    if human_player and human_player.alive:
+        ctx.game_state.add_player_day_summary(
+            day_number=day_number,
+            player_name=human_player.name,
+            discussion_summary="[Human player - no summary generated]",
+            vote_summary=vote_summary
+        )
+
+    logging.info(f"Generated day {day_number} summaries for {len(results)} players")
 
     ctx.game_state.start_night_phase()
     return StepResult(next_step="night_start", next_index=0)

@@ -61,6 +61,9 @@ class GameRules:
     # Mafia rules
     mafia_select_killer: bool = True  # Mafia explicitly selects who performs the kill (affects tracking/blocking)
 
+    # Context pruning (reduces LLM costs in long games)
+    enable_context_pruning: bool = True   # Summarize past days instead of keeping full transcripts
+
 
 # =============================================================================
 # RULE HELPER FUNCTIONS
@@ -121,7 +124,10 @@ def get_investigation_result(rules: GameRules, target_player, game_state) -> tup
     """
     Determine sheriff investigation result for a target.
 
-    Handles special cases for Godfather (appears innocent) and Miller (appears guilty).
+    Handles special cases for:
+    - Godfather (appears innocent)
+    - Consigliere (appears innocent while unconverted)
+    - Miller (appears guilty)
 
     Args:
         rules: GameRules instance
@@ -135,6 +141,12 @@ def get_investigation_result(rules: GameRules, target_player, game_state) -> tup
     """
     role_name = target_player.role.name if target_player.role else None
     true_result = "mafia" if target_player.team == "mafia" else "not mafia"
+
+    # Handle Consigliere - appears innocent while unconverted
+    # Note: Once converted to Mafia, they no longer have this immunity
+    if role_name == "Consigliere" and not target_player.role.has_converted:
+        # Consigliere always appears innocent (no conditions or consumption)
+        return "not mafia", False
 
     # Handle Godfather - appears innocent
     if role_name == "Godfather":

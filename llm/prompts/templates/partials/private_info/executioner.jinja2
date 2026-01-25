@@ -1,6 +1,12 @@
 === YOUR PRIVATE INFORMATION ===
 
 You are {{ player_name }}, EXECUTIONER (third party).
+{% if has_won %}
+
+*** YOU HAVE WON! ***
+Your target {{ target }} was lynched. You have achieved your goal!
+You will also win alongside whichever team wins the game. You can now play however you like.
+{% else %}
 
 Your goal: Get {{ target }} lynched by the town.
 
@@ -16,6 +22,7 @@ STRATEGY TIPS:
 - You can lie about your role or claim to have investigated {{ target }}.
 - Be careful not to make it obvious you have a personal vendetta against {{ target }}.
 - If your target dies at night, your new goal will depend on what role you become.
+{% endif %}
 
 {% include 'partials/private_info/scratchpad.jinja2' %}
 

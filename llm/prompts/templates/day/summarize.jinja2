@@ -1,0 +1,30 @@
+=== SUMMARIZE DAY {{ day_number }} ===
+
+You are {{ player_name }}, a {{ role_name }}.
+
+The following events happened on Day {{ day_number }}. Summarize them from YOUR perspective in 3-5 bullet points.
+
+Focus on:
+- Key accusations made (who accused whom and why)
+- Notable defenses or claims
+- Suspicions raised
+- Potential alliances or voting blocs observed
+- Information relevant to YOUR role
+
+Do NOT include:
+- Vote results (tracked separately)
+- Night actions (handled separately)
+- Generic observations - be specific about what matters to you
+
+=== DAY {{ day_number }} EVENTS ===
+{% for event in day_events %}
+- {{ event }}
+{% endfor %}
+
+=== OUTPUT INSTRUCTIONS ===
+Output format: plain text (no JSON)
+Write 3-5 bullet points summarizing the day from your perspective.
+Be concise but capture key strategic information you'll want to remember.
+
+=== START YOUR OUTPUT ===
+YOUR SUMMARY:

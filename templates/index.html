@@ -239,6 +239,14 @@
                 <label>Godfather:</label>
                 <input type="number" id="role-godfather" min="0" max="3" value="0">
             </div>
+            <div class="role-input">
+                <label>Consort:</label>
+                <input type="number" id="role-consort" min="0" max="3" value="0">
+            </div>
+            <div class="role-input">
+                <label>Consigliere:</label>
+                <input type="number" id="role-consigliere" min="0" max="3" value="0">
+            </div>
             <!-- Town Basic -->
             <div class="role-input">
                 <label>Villager:</label>
@@ -435,6 +443,13 @@
                             <input type="number" id="rule-max-discussion" min="5" max="30" value="10">
                         </div>
                     </div>
+                    <div class="rule-group">
+                        <h4>Context Pruning</h4>
+                        <div class="rule-item">
+                            <label>Enable context pruning (reduces costs)</label>
+                            <input type="checkbox" id="rule-enable-context-pruning" checked>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -519,9 +534,9 @@
         }
 
         function getTotalPlayers() {
-            const roles = ['mafia', 'godfather', 'villager', 'miller', 'mason', 'sheriff', 'doctor',
-                          'vigilante', 'tracker', 'escort', 'medium', 'grandma', 'jester', 'survivor',
-                          'executioner', 'amnesiac'];
+            const roles = ['mafia', 'godfather', 'consort', 'consigliere', 'villager', 'miller', 'mason',
+                          'sheriff', 'doctor', 'vigilante', 'tracker', 'escort', 'medium', 'grandma',
+                          'jester', 'survivor', 'executioner', 'amnesiac'];
             return roles.reduce((sum, role) => {
                 return sum + parseInt(document.getElementById(`role-${role}`).value || 0);
             }, 0);
@@ -531,6 +546,8 @@
             return {
                 Mafia: parseInt(document.getElementById('role-mafia').value || 0),
                 Godfather: parseInt(document.getElementById('role-godfather').value || 0),
+                Consort: parseInt(document.getElementById('role-consort').value || 0),
+                Consigliere: parseInt(document.getElementById('role-consigliere').value || 0),
                 Villager: parseInt(document.getElementById('role-villager').value || 0),
                 Miller: parseInt(document.getElementById('role-miller').value || 0),
                 Mason: parseInt(document.getElementById('role-mason').value || 0),
@@ -566,7 +583,8 @@
                 grandma_knows_shotgun_fired: document.getElementById('rule-grandma-knows-fired').checked,
                 require_majority_to_lynch: document.getElementById('rule-require-majority').checked,
                 allow_no_lynch: document.getElementById('rule-allow-no-lynch').checked,
-                max_discussion_messages: parseInt(document.getElementById('rule-max-discussion').value) || 10
+                max_discussion_messages: parseInt(document.getElementById('rule-max-discussion').value) || 10,
+                enable_context_pruning: document.getElementById('rule-enable-context-pruning').checked
             };
         }
 
@@ -576,7 +594,8 @@
 
             // All role IDs mapped to their preset keys
             const roleMap = {
-                'mafia': 'Mafia', 'godfather': 'Godfather', 'villager': 'Villager',
+                'mafia': 'Mafia', 'godfather': 'Godfather', 'consort': 'Consort',
+                'consigliere': 'Consigliere', 'villager': 'Villager',
                 'miller': 'Miller', 'mason': 'Mason', 'sheriff': 'Sheriff',
                 'doctor': 'Doctor', 'vigilante': 'Vigilante', 'tracker': 'Tracker',
                 'escort': 'Escort', 'medium': 'Medium', 'grandma': 'Grandma',
@@ -649,9 +668,9 @@
             let roleOptions = '<option value="">Random</option>';
 
             // All roles in display order
-            const allRoles = ['Mafia', 'Godfather', 'Villager', 'Miller', 'Mason', 'Sheriff', 'Doctor',
-                            'Vigilante', 'Tracker', 'Escort', 'Medium', 'Grandma', 'Jester', 'Survivor',
-                            'Executioner', 'Amnesiac'];
+            const allRoles = ['Mafia', 'Godfather', 'Consort', 'Consigliere', 'Villager', 'Miller', 'Mason',
+                            'Sheriff', 'Doctor', 'Vigilante', 'Tracker', 'Escort', 'Medium', 'Grandma',
+                            'Jester', 'Survivor', 'Executioner', 'Amnesiac'];
 
             for (const role of allRoles) {
                 if (roles[role] > 0) {

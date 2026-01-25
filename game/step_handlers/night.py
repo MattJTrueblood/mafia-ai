@@ -37,8 +37,31 @@ from llm.prompts import (
 # =============================================================================
 
 def get_mafia_visibility(game_state: GameState) -> List[str]:
-    """Get list of mafia player names for event visibility."""
-    return [p.name for p in game_state.players if p.role and p.role.name in ("Mafia", "Godfather")]
+    """Get list of mafia player names for event visibility.
+
+    Includes all mafia team members: Mafia, Godfather, Consort, and Consigliere.
+    All mafia know each other's identities.
+    """
+    return [p.name for p in game_state.players
+            if p.role and p.role.name in ("Mafia", "Godfather", "Consort", "Consigliere")]
+
+
+def get_mafia_discussion_visibility(game_state: GameState) -> List[str]:
+    """Get list of mafia player names who participate in night discussions.
+
+    Excludes unconverted Consigliere (they don't join mafia meetings until converted).
+    """
+    result = []
+    for p in game_state.players:
+        if not p.role:
+            continue
+        # Regular mafia roles participate
+        if p.role.name in ("Mafia", "Godfather", "Consort"):
+            result.append(p.name)
+        # Consigliere only participates if converted
+        elif p.role.name == "Consigliere" and p.role.has_converted:
+            result.append(p.name)
+    return result
 
 
 def get_mason_visibility(game_state: GameState) -> List[str]:
@@ -59,7 +82,7 @@ def should_write_night_scratchpad(player) -> bool:
     role_name = player.role.name if player.role else None
     return role_name in [
         "Doctor", "Sheriff", "Vigilante", "Mafia", "Godfather",
-        "Escort", "Tracker", "Medium", "Amnesiac"
+        "Escort", "Tracker", "Medium", "Amnesiac", "Consort", "Consigliere"
     ]
 
 
@@ -173,13 +196,13 @@ def resolve_night_actions(game_state: GameState):
 
     # =============================================================================
     # PHASE 1: Build blocked_players set
-    # Escorts are immune to roleblocks by design (avoids blocking chains/deadlocks)
+    # Escorts and Consorts are immune to roleblocks by design (avoids blocking chains/deadlocks)
     # =============================================================================
     blocked_players = set(game_state.phase_data.get("blocked_players", []))
 
-    # Remove escorts from blocked set - they are immune to roleblocks
+    # Remove escorts and consorts from blocked set - they are immune to roleblocks
     for p in game_state.players:
-        if p.role and p.role.name == "Escort" and p.name in blocked_players:
+        if p.role and p.role.name in ("Escort", "Consort") and p.name in blocked_players:
             blocked_players.discard(p.name)
 
     # =============================================================================
@@ -208,6 +231,11 @@ def resolve_night_actions(game_state: GameState):
         if p.role and p.role.name == "Escort" and hasattr(p.role, 'block_history') and p.role.block_history:
             visits[p.name] = p.role.block_history[-1]
 
+    # Consort visits (consorts always visit their target)
+    for p in game_state.players:
+        if p.role and p.role.name == "Consort" and hasattr(p.role, 'block_history') and p.role.block_history:
+            visits[p.name] = p.role.block_history[-1]
+
     # Doctor visits (only if not blocked)
     for p in game_state.players:
         if p.role and p.role.name == "Doctor" and p.name not in blocked_players:
@@ -219,8 +247,11 @@ def resolve_night_actions(game_state: GameState):
     mafia_killer = game_state.phase_data.get("designated_killer")
 
     if mafia_target and not mafia_killer:
+        # Find any alive mafia who can perform kills
+        # Includes: Mafia, Godfather, Consort, and converted Consigliere (role.name becomes "Mafia")
+        # Excludes: unconverted Consigliere (they don't participate in mafia actions)
         alive_mafia = [p for p in game_state.players
-                       if p.alive and p.role and p.role.name in ("Mafia", "Godfather")]
+                       if p.alive and p.role and p.role.name in ("Mafia", "Godfather", "Consort")]
         if alive_mafia:
             mafia_killer = random.choice(alive_mafia).name
 
@@ -484,18 +515,152 @@ def handle_scratchpad_night_start(ctx: StepContext) -> StepResult:
 
         execute_parallel(eligible_players, scratchpad_func, ctx)
 
-    return StepResult(next_step="mafia_discussion", next_index=0)
+    return StepResult(next_step="consigliere_convert", next_index=0)
+
+
+# =============================================================================
+# CONSIGLIERE CONVERSION HANDLER
+# =============================================================================
+
+@register_handler("consigliere_convert")
+def handle_consigliere_convert(ctx: StepContext) -> StepResult:
+    """Consigliere may choose to convert to regular Mafia before mafia discussion."""
+    # Find unconverted Consigliere players
+    consigliere_players = [p for p in ctx.get_players_by_role("Consigliere")
+                           if p.alive and not p.role.has_converted]
+
+    if not consigliere_players:
+        return StepResult(next_step="mafia_discussion", next_index=0)
+
+    index = ctx.step_index
+    if index >= len(consigliere_players):
+        return StepResult(next_step="mafia_discussion", next_index=0)
+
+    consigliere = consigliere_players[index]
+    consigliere_visibility = [consigliere.name]
+    mafia_visibility = get_mafia_visibility(ctx.game_state)
+
+    if index == 0:
+        all_consigliere_names = [p.name for p in consigliere_players]
+        ctx.add_event("system", "Consigliere conversion phase begins.", all_consigliere_names)
+
+    convert = False
+
+    # Check if consigliere is human
+    if consigliere.is_human:
+        human_input = wait_for_human_input(ctx, "role_action",
+            {"options": ["Convert to Mafia", "Stay Undercover"],
+             "label": "Convert to regular Mafia? (Permanent, irreversible)"})
+
+        if human_input and human_input.get("type") == "role_action":
+            choice = human_input.get("target")
+            convert = (choice == "Convert to Mafia")
+    else:
+        # AI decides whether to convert
+        convert = execute_consigliere_conversion_decision(ctx, consigliere)
+
+    if convert:
+        # Convert to regular Mafia
+        from ..roles import ROLE_CLASSES
+        new_role = ROLE_CLASSES["Mafia"]()
+        consigliere.convert_to_role(new_role, "Converted from Consigliere", ctx.day_number)
+
+        ctx.add_event("role_action",
+            "You have converted to a regular Mafia member. You now participate in mafia discussions but are no longer immune to investigation.",
+            consigliere_visibility, player=consigliere.name, priority=8)
+
+        # Notify other mafia (but not the public)
+        other_mafia = [n for n in mafia_visibility if n != consigliere.name]
+        if other_mafia:
+            ctx.add_event("mafia_chat",
+                f"[Mafia Notice] {consigliere.name} (Consigliere) has converted and will now join your discussions.",
+                other_mafia, priority=7)
+    else:
+        ctx.add_event("role_action",
+            "You remain undercover. You will not participate in tonight's mafia discussion.",
+            consigliere_visibility, player=consigliere.name, priority=8)
+
+    return StepResult(next_step="consigliere_convert", next_index=index + 1)
+
+
+def execute_consigliere_conversion_decision(ctx: StepContext, consigliere) -> bool:
+    """AI Consigliere decides whether to convert.
+
+    Returns True if they want to convert, False to stay undercover.
+    """
+    from llm.prompts import build_consigliere_convert_prompt
+
+    prompt = build_consigliere_convert_prompt(ctx.game_state, consigliere)
+    messages = [{"role": "user", "content": prompt}]
+
+    # Simple yes/no schema
+    schema = {
+        "type": "object",
+        "properties": {
+            "convert": {
+                "type": "boolean",
+                "description": "True to convert to regular Mafia, False to stay undercover"
+            },
+            "reasoning": {
+                "type": "string",
+                "description": "Brief reasoning for the decision"
+            }
+        },
+        "required": ["convert"],
+        "additionalProperties": False
+    }
+
+    try:
+        response = call_llm(
+            consigliere, ctx.llm_client, messages, "consigliere_convert", ctx.game_state,
+            response_format={"type": "json_schema", "json_schema": {"name": "consigliere_convert", "schema": schema}},
+            temperature=0.5, cancel_event=ctx.cancel_event, emit_player_status=ctx.emit_player_status
+        )
+
+        # Extract from structured_output or fallback to parsing content
+        if "structured_output" in response:
+            data = response["structured_output"]
+        else:
+            import json
+            content = response.get("content", "")
+            idx = content.find("{")
+            if idx >= 0:
+                data = json.loads(content[idx:content.rfind("}")+1])
+            else:
+                return False
+
+        return data.get("convert", False)
+    except Exception as e:
+        logging.warning(f"Error in consigliere conversion decision for {consigliere.name}: {e}")
+        return False  # Default to staying undercover
 
 
 # =============================================================================
 # MAFIA HANDLERS
 # =============================================================================
 
+def get_mafia_discussion_participants(ctx: StepContext) -> list:
+    """Get list of mafia players who participate in night discussions.
+
+    Includes Mafia, Godfather, Consort, and converted Consigliere.
+    Excludes unconverted Consigliere.
+    """
+    participants = []
+    participants.extend(ctx.get_players_by_role("Mafia"))
+    participants.extend(ctx.get_players_by_role("Godfather"))
+    participants.extend(ctx.get_players_by_role("Consort"))
+    # Only include converted Consigliere
+    for p in ctx.get_players_by_role("Consigliere"):
+        if p.role.has_converted:
+            participants.append(p)
+    return participants
+
+
 @register_handler("mafia_discussion")
 def handle_mafia_discussion(ctx: StepContext) -> StepResult:
     """Mafia members discuss who to kill. Waits for human input if mafia member is human."""
-    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
-    mafia_visibility = get_mafia_visibility(ctx.game_state)
+    mafia_players = get_mafia_discussion_participants(ctx)
+    mafia_visibility = get_mafia_discussion_visibility(ctx.game_state)
     index = ctx.step_index
 
     if index == 0:
@@ -536,8 +701,8 @@ def handle_mafia_discussion(ctx: StepContext) -> StepResult:
 @register_handler("mafia_vote")
 def handle_mafia_vote(ctx: StepContext) -> StepResult:
     """Mafia members vote on kill target. Human mafia votes first, then AI in parallel."""
-    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
-    mafia_visibility = get_mafia_visibility(ctx.game_state)
+    mafia_players = get_mafia_discussion_participants(ctx)
+    mafia_visibility = get_mafia_discussion_visibility(ctx.game_state)
     discussion_messages = ctx.phase_data.get("mafia_discussion_messages", [])
     alive_names = [p.name for p in ctx.get_alive_players()]
 
@@ -616,8 +781,8 @@ def handle_mafia_vote(ctx: StepContext) -> StepResult:
 @register_handler("mafia_select_killer")
 def handle_mafia_select_killer(ctx: StepContext) -> StepResult:
     """Mafia selects which member performs the kill. All mafia vote, majority wins."""
-    mafia_players = ctx.get_players_by_role("Mafia") + ctx.get_players_by_role("Godfather")
-    mafia_visibility = get_mafia_visibility(ctx.game_state)
+    mafia_players = get_mafia_discussion_participants(ctx)
+    mafia_visibility = get_mafia_discussion_visibility(ctx.game_state)
     target = ctx.phase_data.get("mafia_kill_target")
     discussion_messages = ctx.phase_data.get("mafia_discussion_messages", [])
 
@@ -809,7 +974,7 @@ def handle_escort_act(ctx: StepContext) -> StepResult:
         if escort_players:
             all_escort_names = [p.name for p in escort_players]
             ctx.add_event("system", "Escort night phase ends.", all_escort_names)
-        return StepResult(next_step="doctor_discuss", next_index=0)
+        return StepResult(next_step="consort_discuss", next_index=0)
 
     escort = escort_players[index]
     escort_visibility = [escort.name]
@@ -843,6 +1008,84 @@ def handle_escort_act(ctx: StepContext) -> StepResult:
                      escort_visibility, player=escort.name, priority=7)
 
     return StepResult(next_step="escort_act", next_index=index + 1)
+
+
+# =============================================================================
+# CONSORT HANDLERS
+# =============================================================================
+
+@register_handler("consort_discuss")
+def handle_consort_discuss(ctx: StepContext) -> StepResult:
+    """Consort thinks through blocking options. Skips discussion for human players."""
+    consort_players = [p for p in ctx.get_players_by_role("Consort") if p.alive]
+    index = ctx.step_index
+
+    if not consort_players:
+        return StepResult(next_step="doctor_discuss", next_index=0)
+
+    if index >= len(consort_players):
+        return StepResult(next_step="consort_act", next_index=0)
+
+    consort = consort_players[index]
+    consort_visibility = [consort.name]
+
+    if index == 0:
+        all_consort_names = [p.name for p in consort_players]
+        ctx.add_event("system", "Consort night phase begins.", all_consort_names)
+
+    # Skip discussion for human players
+    if not consort.is_human:
+        discussion = execute_role_discussion(ctx, consort, "consort")
+        ctx.add_event("role_action", f"[Consort Discussion] {consort.name}: {discussion}",
+                      consort_visibility, player=consort.name, priority=6)
+
+    return StepResult(next_step="consort_discuss", next_index=index + 1)
+
+
+@register_handler("consort_act")
+def handle_consort_act(ctx: StepContext) -> StepResult:
+    """Consort chooses who to block. Waits for human input if consort is human."""
+    consort_players = [p for p in ctx.get_players_by_role("Consort") if p.alive]
+    index = ctx.step_index
+
+    if index >= len(consort_players):
+        if consort_players:
+            all_consort_names = [p.name for p in consort_players]
+            ctx.add_event("system", "Consort night phase ends.", all_consort_names)
+        return StepResult(next_step="doctor_discuss", next_index=0)
+
+    consort = consort_players[index]
+    consort_visibility = [consort.name]
+    alive_names = [p.name for p in ctx.get_alive_players()]
+
+    target = None
+
+    # Check if consort is human
+    if consort.is_human:
+        human_input = wait_for_human_input(ctx, "role_action", {"options": alive_names, "label": "Block Someone"})
+
+        if human_input and human_input.get("type") == "role_action":
+            target = human_input.get("target")
+            if target == "ABSTAIN":
+                target = None
+            elif target and target not in alive_names:
+                target = None
+    else:
+        target = execute_role_action(ctx, consort, "consort")
+
+    if target:
+        # Store the blocked target
+        if "blocked_players" not in ctx.phase_data:
+            ctx.phase_data["blocked_players"] = []
+        ctx.phase_data["blocked_players"].append(target)
+
+        # Record in consort's history
+        consort.role.block_history.append(target)
+
+        ctx.add_event("role_action", f"Consort {consort.name} visits {target} tonight.",
+                     consort_visibility, player=consort.name, priority=7)
+
+    return StepResult(next_step="consort_act", next_index=index + 1)
 
 
 # =============================================================================
@@ -1644,9 +1887,9 @@ def handle_night_resolve(ctx: StepContext) -> StepResult:
     # Needed here for medium/amnesiac resolution which requires ctx for LLM calls
     blocked_players = set(ctx.phase_data.get("blocked_players", []))
 
-    # Remove escorts from blocked set - they are immune to roleblocks
+    # Remove escorts and consorts from blocked set - they are immune to roleblocks
     for p in ctx.game_state.players:
-        if p.role and p.role.name == "Escort" and p.name in blocked_players:
+        if p.role and p.role.name in ("Escort", "Consort") and p.name in blocked_players:
             blocked_players.discard(p.name)
 
     # Resolve medium seances (requires LLM calls)
